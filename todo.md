@@ -58,3 +58,12 @@
 - [x] Add procedural idle, walking, attack, hit, casting, and victory animations.
 - [x] Validate click-to-move, enemy engagement, and animation readability in the browser.
 - [x] Run the production checks and publish the motion upgrade.
+
+## Hushling Encounter Enhancement
+
+- [x] Audit the current auto-strike distance checks and Cinder Lash hit timing.
+- [x] Define Hushling evade, orbit, feint, and retaliatory lunge behavior.
+- [x] Define reusable ember-burst particle lifetime, movement, and impact-flash rules.
+- [x] Implement dynamic Hushling encounter movement and Cinder Lash impact effects.
+- [x] Validate the behavior loop and particle readability in a live encounter.
+- [x] Run production checks and publish the encounter enhancement.

@@ -32,6 +32,16 @@ type WorldOptions = {
   demoMode: boolean;
 };
 
+type HushlingPattern = "orbit" | "feint" | "lunge" | "recover";
+
+type EmberParticle = {
+  mesh: AbstractMesh;
+  velocity: Vector3;
+  life: number;
+  maxLife: number;
+  spin: number;
+};
+
 const color = (value: string) => Color3.FromHexString(value);
 
 export class GameWorld {
@@ -66,10 +76,20 @@ export class GameWorld {
   private enemyBody!: TransformNode;
   private enemyEyes!: TransformNode;
   private enemyTendrils: TransformNode[] = [];
+  private cinderImpactRing!: AbstractMesh;
+  private cinderImpactFlash!: AbstractMesh;
+  private emberParticles: EmberParticle[] = [];
   private moveTarget: Vector3 | null = null;
   private enemySelected = false;
   private autoStrikeCooldown = 0;
   private autoStrikeCount = 0;
+  private hushlingPattern: HushlingPattern = "orbit";
+  private hushlingPatternTimer = 0.9;
+  private hushlingLungeCooldown = 2.7;
+  private hushlingLungeHit = false;
+  private hushlingOrbitDirection = 1;
+  private readonly hushlingVelocity = new Vector3(0, 0, 0);
+  private cinderImpactTimer = 0;
   private readonly playerVelocity = new Vector3(0, 0, 0);
   private readonly playerMoveDirection = new Vector3(0, 0, 1);
   private playerMotion = 0;
@@ -124,6 +144,7 @@ export class GameWorld {
     }
 
     this.updateCharacterMotion(delta);
+    this.updateCinderLashImpact(delta);
     this.updateCommandMarkers(delta);
 
     const pulse = 0.86 + Math.sin(this.time * 4.2) * 0.14;
@@ -158,6 +179,11 @@ export class GameWorld {
     this.enemyHitTimer = 0;
     this.enemyAttackTimer = 0;
     this.enemyDefeatTimer = 0;
+    this.resetHushlingPattern();
+    this.cinderImpactTimer = 0;
+    this.cinderImpactRing.setEnabled(false);
+    this.cinderImpactFlash.setEnabled(false);
+    this.emberParticles.forEach((particle) => particle.mesh.setEnabled(false));
     this.resetMotionRig();
     this.minimapUiTimer = 0;
     this.cursorMarker.setEnabled(false);
@@ -221,6 +247,9 @@ export class GameWorld {
     const damage = 16;
     this.playerCastTimer = 0.52;
     this.enemyHitTimer = 0.42;
+    this.spawnCinderLashImpact();
+    this.hushlingPattern = "recover";
+    this.hushlingPatternTimer = 0.46;
     this.state.skillCooldowns[skillId] = 6;
     this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
     this.state.log = `Cinder Lash arcs through the bramble for ${damage} ember damage.`;
@@ -555,6 +584,36 @@ export class GameWorld {
     this.enemyLight.range = 3.3;
     this.enemyLight.intensity = 0.72;
     this.enemyLight.parent = this.enemy;
+    this.createCinderLashImpactEffect();
+  }
+
+  private createCinderLashImpactEffect() {
+    const ember = this.material("cinder-impact-ember", palette.ember, { emissive: palette.emberLight, specular: "#fff2ad" });
+    const emberSoft = this.material("cinder-impact-soft", "#f9cf69", { emissive: "#f4a62f", specular: "#fff7c8" });
+    emberSoft.alpha = 0.7;
+
+    const ring = MeshBuilder.CreateTorus("cinder-lash-impact-ring", { diameter: 0.92, thickness: 0.045, tessellation: 28 }, this.scene);
+    ring.material = ember;
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.08;
+    ring.parent = this.enemy;
+    ring.setEnabled(false);
+    this.cinderImpactRing = ring;
+
+    const flash = MeshBuilder.CreateSphere("cinder-lash-impact-flash", { diameter: 0.46, segments: 8 }, this.scene);
+    flash.material = emberSoft;
+    flash.position.y = 0.72;
+    flash.parent = this.enemy;
+    flash.setEnabled(false);
+    this.cinderImpactFlash = flash;
+
+    for (let index = 0; index < 16; index += 1) {
+      const shard = MeshBuilder.CreatePolyhedron(`cinder-lash-ember-${index}`, { type: index % 3, size: 0.09 + (index % 4) * 0.012 }, this.scene);
+      shard.material = index % 3 === 0 ? emberSoft : ember;
+      shard.parent = this.enemy;
+      shard.setEnabled(false);
+      this.emberParticles.push({ mesh: shard, velocity: Vector3.Zero(), life: 0, maxLife: 0, spin: 0 });
+    }
   }
 
   private createShard() {
@@ -685,6 +744,7 @@ export class GameWorld {
     this.cursorMarker.setEnabled(false);
     this.enemySelected = true;
     this.autoStrikeCooldown = 0;
+    this.resetHushlingPattern();
     this.enemyMarker.position.copyFrom(this.enemy.position);
     this.enemyMarker.position.y = 0.035;
     this.targetPulseTimer = 0.72;
@@ -713,6 +773,7 @@ export class GameWorld {
 
   private updateAutoStrike(delta: number) {
     if (!this.enemySelected || !this.enemy.isEnabled()) return;
+    this.updateHushlingPattern(delta);
     const route = this.enemy.position.subtract(this.player.position);
     const distance = route.length();
     this.enemyMarker.position.copyFrom(this.enemy.position);
@@ -737,6 +798,8 @@ export class GameWorld {
       this.defeatEnemy();
       return;
     }
+    this.hushlingPattern = passiveStrike ? "recover" : "feint";
+    this.hushlingPatternTimer = passiveStrike ? 0.56 : 0.36;
     const retaliation = 4;
     this.state.hp = Math.max(0, this.state.hp - retaliation);
     this.enemyAttackTimer = 0.34;
@@ -804,6 +867,7 @@ export class GameWorld {
     this.state.enemyHp = 0;
     this.enemyDefeatTimer = 0.72;
     this.playerVictoryTimer = 0.85;
+    this.hushlingVelocity.set(0, 0, 0);
     this.enemySelected = false;
     this.enemyMarker.setEnabled(false);
     this.shard.setEnabled(true);
@@ -859,6 +923,132 @@ export class GameWorld {
       this.state.lootCount = displayCount;
       this.state.lootPulse += 1;
     }
+  }
+
+  private updateHushlingPattern(delta: number) {
+    if (!this.enemySelected || this.state.combatState !== "combat" || !this.enemy.isEnabled()) return;
+    const playerOffset = this.player.position.subtract(this.enemy.position);
+    playerOffset.y = 0;
+    const distance = Math.max(0.001, playerOffset.length());
+    const towardPlayer = playerOffset.scale(1 / distance);
+    const sideways = new Vector3(-towardPlayer.z, 0, towardPlayer.x).scale(this.hushlingOrbitDirection);
+    this.hushlingPatternTimer -= delta;
+    this.hushlingLungeCooldown = Math.max(0, this.hushlingLungeCooldown - delta);
+
+    if (this.hushlingPatternTimer <= 0) {
+      if (this.hushlingPattern === "orbit") {
+        this.hushlingPattern = distance < 2.3 && this.hushlingLungeCooldown <= 0 ? "lunge" : "feint";
+        this.hushlingPatternTimer = this.hushlingPattern === "lunge" ? 0.34 : 0.42;
+        this.hushlingLungeHit = false;
+        if (this.hushlingPattern === "lunge") {
+          this.hushlingLungeCooldown = 3.2;
+          this.state.log = "The Hushling folds its roots and lashes through the mist.";
+          this.emit();
+        }
+      } else if (this.hushlingPattern === "feint" || this.hushlingPattern === "lunge") {
+        this.hushlingPattern = "recover";
+        this.hushlingPatternTimer = 0.56;
+      } else {
+        this.hushlingPattern = "orbit";
+        this.hushlingPatternTimer = 0.9;
+        this.hushlingOrbitDirection *= -1;
+      }
+    }
+
+    let direction = sideways;
+    let speed = 1.32;
+    if (this.hushlingPattern === "orbit") {
+      direction = sideways.scale(0.8).add(towardPlayer.scale((distance - 2.05) * 0.72));
+      speed = 1.45;
+    } else if (this.hushlingPattern === "feint") {
+      direction = sideways.scale(0.9).add(towardPlayer.scale(-0.72));
+      speed = 4.15;
+    } else if (this.hushlingPattern === "lunge") {
+      direction = towardPlayer;
+      speed = 6.1;
+      if (!this.hushlingLungeHit && distance < 1.25) {
+        this.hushlingLungeHit = true;
+        this.state.hp = Math.max(0, this.state.hp - 3);
+        this.enemyAttackTimer = 0.36;
+        this.playerHitTimer = 0.22;
+        this.state.log = "Bramble Skitter catches your flank for 3 warmth.";
+        if (this.state.hp <= 0) {
+          this.state.combatState = "defeated";
+          this.enemySelected = false;
+          this.enemyMarker.setEnabled(false);
+          this.state.log = "The Hushling’s roots close in. Return to the old road when your lantern is ready.";
+        }
+        this.emit();
+      }
+    } else {
+      direction = sideways.scale(0.45).add(towardPlayer.scale((distance - 2.12) * 0.95));
+      speed = 1.8;
+    }
+
+    if (direction.lengthSquared() > 0.0001) direction.normalize();
+    const steer = 1 - Math.exp(-delta * 10);
+    this.hushlingVelocity.x += (direction.x * speed - this.hushlingVelocity.x) * steer;
+    this.hushlingVelocity.z += (direction.z * speed - this.hushlingVelocity.z) * steer;
+    this.enemy.position.addInPlace(this.hushlingVelocity.scale(delta));
+    this.enemy.position.x = Math.max(-21.3, Math.min(21.3, this.enemy.position.x));
+    this.enemy.position.z = Math.max(-15.3, Math.min(15.3, this.enemy.position.z));
+    const facing = Math.atan2(towardPlayer.x, towardPlayer.z);
+    this.enemy.rotation.y = this.lerpAngle(this.enemy.rotation.y, facing, 1 - Math.exp(-delta * 12));
+  }
+
+  private resetHushlingPattern() {
+    this.hushlingPattern = "orbit";
+    this.hushlingPatternTimer = 0.88;
+    this.hushlingLungeCooldown = 2.5;
+    this.hushlingLungeHit = false;
+    this.hushlingOrbitDirection = 1;
+    this.hushlingVelocity.set(0, 0, 0);
+  }
+
+  private spawnCinderLashImpact() {
+    this.cinderImpactTimer = 0.62;
+    this.cinderImpactRing.setEnabled(true);
+    this.cinderImpactFlash.setEnabled(true);
+    this.emberParticles.forEach((particle, index) => {
+      const angle = (index / this.emberParticles.length) * Math.PI * 2 + this.time * 0.75;
+      const speed = 1.25 + (index % 4) * 0.22;
+      particle.maxLife = 0.34 + (index % 5) * 0.045;
+      particle.life = particle.maxLife;
+      particle.spin = (index % 2 ? -1 : 1) * (4.5 + (index % 3));
+      particle.velocity.set(Math.cos(angle) * speed, 1.35 + (index % 3) * 0.24, Math.sin(angle) * speed);
+      particle.mesh.position.set(0, 0.76, 0);
+      particle.mesh.rotation.set(angle, angle * 0.5, -angle);
+      particle.mesh.scaling.set(1, 1, 1);
+      particle.mesh.setEnabled(true);
+    });
+  }
+
+  private updateCinderLashImpact(delta: number) {
+    if (this.cinderImpactTimer > 0) {
+      this.cinderImpactTimer = Math.max(0, this.cinderImpactTimer - delta);
+      const progress = 1 - this.cinderImpactTimer / 0.62;
+      const ringScale = 0.75 + progress * 2.65;
+      this.cinderImpactRing.scaling.set(ringScale, ringScale, ringScale);
+      this.cinderImpactRing.rotation.y += delta * 8.5;
+      const flashScale = 1 + Math.sin(Math.min(1, progress * 2.2) * Math.PI) * 1.55;
+      this.cinderImpactFlash.scaling.set(flashScale, flashScale, flashScale);
+      if (this.cinderImpactTimer === 0) {
+        this.cinderImpactRing.setEnabled(false);
+        this.cinderImpactFlash.setEnabled(false);
+      }
+    }
+    this.emberParticles.forEach((particle) => {
+      if (particle.life <= 0) return;
+      particle.life = Math.max(0, particle.life - delta);
+      particle.mesh.position.addInPlace(particle.velocity.scale(delta));
+      particle.velocity.y -= delta * 4.6;
+      particle.mesh.rotation.x += particle.spin * delta;
+      particle.mesh.rotation.z += particle.spin * 0.62 * delta;
+      const fade = particle.life / particle.maxLife;
+      const scale = 0.35 + fade * 0.9;
+      particle.mesh.scaling.set(scale, scale, scale);
+      if (particle.life === 0) particle.mesh.setEnabled(false);
+    });
   }
 
   private updateCharacterMotion(delta: number) {
