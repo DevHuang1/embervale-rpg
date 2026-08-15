@@ -5,10 +5,7 @@ import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
-import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
-import "@babylonjs/core/Shaders/default.fragment";
-import "@babylonjs/core/Shaders/default.vertex";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
@@ -141,6 +138,7 @@ export class GameWorld {
     item.quantity -= 1;
     this.state.hp += restored;
     this.state.lootNotice = null;
+    this.state.lootCount = 0;
     this.state.log = `You drink a Moss Tonic and recover ${restored} warmth.`;
     this.emit();
   }
@@ -200,8 +198,6 @@ export class GameWorld {
     skyLight.intensity = 1.25;
     skyLight.diffuse = color("#b4d7ca");
     skyLight.groundColor = color("#07140e");
-
-    new GlowLayer("lantern-bloom", this.scene, { blurKernelSize: 32 }).intensity = 0.55;
 
     const groundMat = this.material("grove-floor-mat", palette.bottle, { specular: "#000000" });
     const ground = MeshBuilder.CreateGround("whispergrove-floor", { width: 24, height: 20, subdivisions: 2 }, this.scene);
@@ -526,7 +522,7 @@ export class GameWorld {
       this.state.stage = "lightBeacon";
       this.state.shardCollected = true;
       this.shard.setEnabled(false);
-      this.addLoot("ember-shard", 1, "Quest item secured — Ember Shard added to the satchel.");
+      this.addLoot("ember-shard", 1, "Ember Shard secured in the satchel.");
       this.state.log = "The Ember Shard is warm in your palm. The beacon answers from the ridge.";
       this.emit();
     }
@@ -549,8 +545,8 @@ export class GameWorld {
     this.enemySelected = false;
     this.enemyMarker.setEnabled(false);
     this.shard.setEnabled(true);
-    this.addLoot("hushling-thorn", 1, "Loot acquired — Hushling Thorn and Moss Tonic added to the satchel.");
-    this.addLoot("moss-tonic", 1);
+    this.addLoot("hushling-thorn", 1);
+    this.addLoot("moss-tonic", 1, "Hushling cache secured — Thorn and Moss Tonic added.", 2);
     this.state.log = "The Hushling loosens its thorns. An Ember Shard falls into the grass.";
     this.emit();
   }
@@ -588,10 +584,14 @@ export class GameWorld {
     }
   }
 
-  private addLoot(itemId: ItemId, amount: number, notice?: string) {
+  private addLoot(itemId: ItemId, amount: number, notice?: string, displayCount = amount) {
     const item = this.state.inventory.find((entry) => entry.id === itemId);
     if (item) item.quantity += amount;
-    if (notice) this.state.lootNotice = notice;
+    if (notice) {
+      this.state.lootNotice = notice;
+      this.state.lootCount = displayCount;
+      this.state.lootPulse += 1;
+    }
   }
 
   private handleCanvasPointerDown(event: PointerEvent) {

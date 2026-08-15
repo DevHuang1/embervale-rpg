@@ -1,6 +1,6 @@
 // Moss & Candlewax design reminder: inventory and class tools are a field kit—small, hand-inked, and arranged around the living grove.
 
-import { useMemo, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useState, type PointerEvent } from "react";
 import { ASSETS } from "@/game/assets";
 import { classSkills, questCopy, type GameState, type ItemId, type SkillId } from "@/game/types";
 
@@ -24,10 +24,31 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
   const combatLabel = useMemo(() => state.combatState === "combat" ? "Auto-strike engaged" : "Lantern bearer", [state.combatState]);
   const itemCount = state.inventory.reduce((total, item) => total + item.quantity, 0);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [minimapOpen, setMinimapOpen] = useState(false);
+  const [showLoot, setShowLoot] = useState(false);
   const handleMapPointer = (event: PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     onMapClick((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
   };
+  useEffect(() => {
+    if (!state.lootNotice) return;
+    setShowLoot(true);
+    const timeout = window.setTimeout(() => setShowLoot(false), 2800);
+    return () => window.clearTimeout(timeout);
+  }, [state.lootNotice, state.lootPulse]);
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
+      if (event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        setInventoryOpen((open) => !open);
+      }
+      if (event.key === "Escape") setInventoryOpen(false);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   return (
     <div className="game-overlay" aria-live="polite">
@@ -54,7 +75,12 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
       <section className="player-overlay hud-interactive" aria-label="Player status">
         <div className="overlay-health"><span className="overlay-sigil">✦</span><div><div className="overlay-label"><span>Warmth</span><b>{state.hp}/{state.maxHp}</b></div><div className="health-track"><span className="health-fill" style={{ width: healthPercent(state.hp, state.maxHp) }} /></div></div></div>
         <div className="overlay-class"><span>Class</span><b>{state.playerClass}</b><em>Lv. {state.level}</em></div>
-        <button className="inventory-trigger" type="button" aria-expanded={inventoryOpen} aria-controls="inventory-drawer" onPointerDown={(event) => event.stopPropagation()} onClick={() => setInventoryOpen((open) => !open)}><span>Satchel</span><b>{itemCount}</b><i>{inventoryOpen ? "−" : "+"}</i></button>
+        <button className="inventory-trigger" type="button" aria-expanded={inventoryOpen} aria-controls="inventory-drawer" onPointerDown={(event) => event.stopPropagation()} onClick={() => setInventoryOpen((open) => !open)}><span>Satchel <kbd>I</kbd></span><b>{itemCount}</b><i>{inventoryOpen ? "−" : "+"}</i></button>
+      </section>
+
+      <section className="minimap-control hud-interactive" aria-label="Forest minimap controls">
+        <button className="minimap-toggle" type="button" aria-expanded={minimapOpen} aria-controls="forest-minimap" onPointerDown={(event) => event.stopPropagation()} onClick={() => setMinimapOpen((open) => !open)}><span>Grove map</span><i>{minimapOpen ? "−" : "+"}</i></button>
+        {minimapOpen && <aside className="forest-minimap" id="forest-minimap" aria-label="Whispergrove minimap"><div className="map-header"><span>Whispergrove</span><b>{quest.chapter}</b></div><div className="map-field"><i className="map-path path-a" /><i className="map-path path-b" /><span className="map-marker player">✦<em>You</em></span><span className={`map-marker hushling ${state.stage === "seekSprite" ? "active" : ""}`}>◌<em>Hushling</em></span><span className={`map-marker shard ${state.stage === "claimShard" ? "active" : ""}`}>◆<em>Ember</em></span><span className={`map-marker beacon ${state.stage === "lightBeacon" ? "active" : ""}`}>✦<em>Beacon</em></span></div><p>Follow the amber path through the grove.</p></aside>}
       </section>
 
       {inventoryOpen && <section className="inventory-drawer hud-interactive" id="inventory-drawer" aria-label="Satchel inventory">
@@ -78,7 +104,7 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
         </div>
       </section>}
 
-      {state.lootNotice && <section className="loot-toast hud-interactive"><span>✦</span><p>{state.lootNotice}</p></section>}
+      {showLoot && state.lootNotice && <section key={state.lootPulse} className="loot-counter hud-interactive" aria-live="polite"><span className="loot-count">+{state.lootCount}</span><div><b>Loot secured</b><p>{state.lootNotice}</p></div><i>✦</i></section>}
       <section className="field-note hud-interactive"><span className="wax-mark">✦</span><p>{state.log}</p></section>
 
       {state.combatState === "combat" && <section className="encounter-card hud-interactive" aria-label="Automatic combat status"><div className="encounter-head"><div className="enemy-portrait"><img src={ASSETS.spritePortrait} alt="The Hushling" /></div><div><p>Wild encounter</p><h2>The Hushling</h2><div className="bar-label enemy-label"><span>Shadow knot</span><b>{state.enemyHp}/{state.maxEnemyHp}</b></div><div className="health-track enemy-track"><span className="health-fill enemy-fill" style={{ width: healthPercent(state.enemyHp, state.maxEnemyHp) }} /></div></div></div><div className="turn-stamp"><span>{combatLabel}</span><i /></div><div className="auto-strike-status"><span className="auto-sigil">✦</span><span><b>Target locked</b><small>Elian closes in and strikes as soon as the Hushling is within reach.</small></span></div></section>}

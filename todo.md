@@ -19,3 +19,11 @@
 - [x] Add a compact status overlay with health and active class.
 - [x] Add an inventory button and focused inventory drawer.
 - [x] Verify overlay interaction alongside movement and combat.
+
+## Navigation and Feedback Upgrade
+
+- [x] Identify the shader URL routing failure that returns HTML to Babylon.
+- [x] Add a toggled minimap to the compact player overlay.
+- [x] Add a visible animated loot counter for new drops.
+- [x] Add keyboard shortcuts to open and close the Satchel drawer.
+- [x] Validate shader compilation, loot animation, overlay controls, and live gameplay.

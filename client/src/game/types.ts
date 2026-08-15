@@ -60,6 +60,8 @@ export interface GameState {
   skillCooldowns: Record<SkillId, number>;
   inventory: InventoryItem[];
   lootNotice: string | null;
+  lootCount: number;
+  lootPulse: number;
 }
 
 export const createInitialGameState = (): GameState => ({
@@ -83,6 +85,8 @@ export const createInitialGameState = (): GameState => ({
     { id: "ember-shard", name: "Ember Shard", kind: "quest", quantity: 0, description: "A lost fragment needed to awaken the grove beacon." },
   ],
   lootNotice: null,
+  lootCount: 0,
+  lootPulse: 0,
 });
 
 export const initialGameState = createInitialGameState();
