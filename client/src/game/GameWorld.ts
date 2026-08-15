@@ -39,6 +39,7 @@ export class GameWorld {
   private readonly canvas: HTMLCanvasElement;
   private readonly onStateChange: (state: GameState) => void;
   private readonly demoMode: boolean;
+  private camera!: ArcRotateCamera;
   private state: GameState = createInitialGameState();
   private player!: TransformNode;
   private enemy!: TransformNode;
@@ -101,6 +102,8 @@ export class GameWorld {
     this.enemy.position.y = Math.sin(this.time * 2.2 + 1) * 0.08;
     this.enemy.rotation.y += delta * 0.24;
     this.shard.rotation.y += delta * 1.3;
+    const cameraTarget = this.camera.getTarget();
+    this.camera.setTarget(Vector3.Lerp(cameraTarget, new Vector3(this.player.position.x, 0, this.player.position.z), Math.min(1, delta * 1.15)));
 
     if (this.state.stage !== "seekSprite" && this.state.combatState !== "combat") {
       this.checkQuestProgress();
@@ -197,35 +200,41 @@ export class GameWorld {
     this.scene.fogDensity = 0.018;
     this.scene.fogColor = color(palette.bottle);
 
-    const camera = new ArcRotateCamera("storybook-camera", -1.04, 1.02, 31, new Vector3(-1, 0, 0), this.scene);
-    this.scene.activeCamera = camera;
-    camera.lowerRadiusLimit = 24;
-    camera.upperRadiusLimit = 39;
-    camera.lowerBetaLimit = 0.82;
-    camera.upperBetaLimit = 1.12;
-    camera.fov = 0.78;
-    camera.attachControl(this.canvas, false);
+    this.camera = new ArcRotateCamera("storybook-camera", -1.04, 1.02, 31, this.playerStart.clone(), this.scene);
+    this.scene.activeCamera = this.camera;
+    this.camera.lowerRadiusLimit = 24;
+    this.camera.upperRadiusLimit = 40;
+    this.camera.lowerBetaLimit = 0.8;
+    this.camera.upperBetaLimit = 1.14;
+    this.camera.fov = 0.74;
+    this.camera.attachControl(this.canvas, false);
 
     const skyLight = new HemisphericLight("mist-light", new Vector3(0.3, 1, -0.3), this.scene);
-    skyLight.intensity = 1.25;
-    skyLight.diffuse = color("#b4d7ca");
-    skyLight.groundColor = color("#07140e");
+    skyLight.intensity = 1.55;
+    skyLight.diffuse = color("#bfd8c4");
+    skyLight.groundColor = color("#06150f");
+    const moonLight = new HemisphericLight("moonwash", new Vector3(-0.55, 0.35, 0.65), this.scene);
+    moonLight.intensity = 0.36;
+    moonLight.diffuse = color("#789bb1");
+    moonLight.groundColor = color("#123022");
 
-    const groundMat = this.material("grove-floor-mat", palette.bottle, { specular: "#000000" });
+    const groundMat = this.material("grove-floor-mat", "#153b2a", { emissive: "#07170f", specular: "#1d4631" });
     const ground = MeshBuilder.CreateGround("whispergrove-floor", { width: 52, height: 40, subdivisions: 4 }, this.scene);
     ground.material = groundMat;
     ground.isPickable = true;
     ground.position.y = -0.04;
 
-    const fringeMat = this.material("forest-fringe-mat", "#0a2117", { specular: "#000000" });
+    const fringeMat = this.material("forest-fringe-mat", "#091f17", { emissive: "#06130e", specular: "#000000" });
     const fringe = MeshBuilder.CreateGround("forest-fringe", { width: 66, height: 54 }, this.scene);
     fringe.material = fringeMat;
     fringe.position.y = -0.09;
 
+    this.createTerrainLayers();
     this.createPointerMarkers();
     this.createPath();
     this.createForest();
     this.createRuinScatter();
+    this.createLandmarks();
     this.createPlayer();
     this.createEnemy();
     this.createShard();
@@ -241,7 +250,7 @@ export class GameWorld {
       [3.7, -5.1], [6.15, -6.45], [8.6, -7.8], [11.2, -9.15], [14.2, -10.4],
     ];
     points.forEach(([x, z], index) => {
-      const plate = MeshBuilder.CreateDisc(`path-stone-${index}`, { radius: 0.62 + (index % 3) * 0.07, tessellation: 7 }, this.scene);
+      const plate = MeshBuilder.CreateDisc(`path-stone-${index}`, { radius: 0.78 + (index % 3) * 0.09, tessellation: 7 }, this.scene);
       plate.material = stone;
       plate.rotation.x = Math.PI / 2;
       plate.rotation.z = (index % 2 ? 0.2 : -0.16) + index * 0.08;
@@ -259,15 +268,18 @@ export class GameWorld {
       [-18, -1], [-15.4, -2.9], [-12.6, -4.8], [-10, -7], [-7.8, -8.8], [-4.8, -9.2], [-2, -10.8], [3.4, -9.7], [6.1, -10.4], [9.1, -11.6], [12.4, -12.8], [16.1, -11.5],
       [18.6, 4.5], [17.3, 1.1], [18.8, -3.5], [14.8, 4.1], [12.2, 2.4], [9.4, 1.2], [5.8, 2.5], [2.4, 4.2], [-1.2, 5.3], [-5.3, 4.8],
     ];
-    treePositions.forEach(([x, z], index) => this.createTree(index, x, z, 0.7 + (index % 4) * 0.09));
+    treePositions.forEach(([x, z], index) => {
+      this.createTree(index, x, z, 0.78 + (index % 5) * 0.1);
+      if (index % 5 === 0) this.createFernCluster(index, x + 0.7, z - 0.45);
+    });
   }
 
   private createTree(index: number, x: number, z: number, scale: number) {
     const root = new TransformNode(`tree-${index}`, this.scene);
     root.position = new Vector3(x, 0, z);
     root.rotation.y = index * 0.58;
-    const trunkMat = this.material(`trunk-mat-${index}`, index % 3 ? palette.cedar : "#3a2a22", { specular: "#000000" });
-    const leafMat = this.material(`leaf-mat-${index}`, index % 3 ? palette.pine : "#1d4a31", { specular: "#000000" });
+    const trunkMat = this.material(`trunk-mat-${index}`, index % 3 ? palette.cedar : "#453229", { emissive: "#090603", specular: "#1b130f" });
+    const leafMat = this.material(`leaf-mat-${index}`, index % 4 ? palette.pine : "#28553c", { emissive: index % 4 ? "#081c11" : "#102a19", specular: "#000000" });
     const mossMat = this.material(`moss-mat-${index}`, palette.moss, { emissive: "#102514", specular: "#000000" });
     const trunk = MeshBuilder.CreateCylinder(`trunk-${index}`, { height: 2.8 * scale, diameterTop: 0.34 * scale, diameterBottom: 0.52 * scale, tessellation: 6 }, this.scene);
     trunk.material = trunkMat;
@@ -279,6 +291,65 @@ export class GameWorld {
       crown.scaling.y = 0.72;
       crown.position = new Vector3((tier % 2 ? 0.12 : -0.08) * scale, height * scale, (tier % 2 ? -0.07 : 0.08) * scale);
       crown.parent = root;
+    });
+  }
+
+  private createTerrainLayers() {
+    const meadowMat = this.material("meadow-island", "#2c6540", { emissive: "#0c2616", specular: "#1c5434" });
+    const ridgeMat = this.material("mossy-ridge", "#1d4c34", { emissive: "#0d2517", specular: "#000000" });
+    const waterMat = this.material("moonrun-water", "#2d7080", { emissive: "#0c3340", specular: "#8fd5d5" });
+    waterMat.alpha = 0.78;
+    [[-15, 7, 4.6, 2.7], [-5, 4, 3.8, 2.1], [3, -2, 4.5, 2.5], [12, -8, 5.7, 3.1]].forEach(([x, z, sx, sz], index) => {
+      const meadow = MeshBuilder.CreateDisc(`moss-meadow-${index}`, { radius: 1.2, tessellation: 32 }, this.scene);
+      meadow.material = meadowMat;
+      meadow.rotation.x = Math.PI / 2;
+      meadow.scaling = new Vector3(sx, sz, 1);
+      meadow.position = new Vector3(x, -0.018, z);
+    });
+    [[-20, 8], [-18, -8], [-1, 13], [8, 11], [20, -5], [10, -14]].forEach(([x, z], index) => {
+      const ridge = MeshBuilder.CreateSphere(`soft-ridge-${index}`, { diameter: 3.8 + (index % 2) * 1.1, segments: 7 }, this.scene);
+      ridge.material = ridgeMat;
+      ridge.scaling = new Vector3(1.25, 0.26, 0.72);
+      ridge.position = new Vector3(x, 0.22, z);
+    });
+    const stream = MeshBuilder.CreateGround("moonrun-stream", { width: 3.7, height: 28, subdivisions: 2 }, this.scene);
+    stream.material = waterMat;
+    stream.position = new Vector3(17.7, -0.025, -1.7);
+    stream.rotation.y = -0.24;
+  }
+
+  private createFernCluster(index: number, x: number, z: number) {
+    const fernMat = this.material(`fern-mat-${index}`, index % 2 ? "#4f8749" : "#699b54", { emissive: "#0d3017", specular: "#000000" });
+    for (let blade = 0; blade < 4; blade += 1) {
+      const leaf = MeshBuilder.CreateDisc(`fern-${index}-${blade}`, { radius: 0.3 + blade * 0.025, tessellation: 5 }, this.scene);
+      leaf.material = fernMat;
+      leaf.rotation.x = Math.PI / 2;
+      leaf.rotation.z = blade * 1.58;
+      leaf.scaling = new Vector3(1.75, 0.55, 1);
+      leaf.position = new Vector3(x + Math.cos(blade) * 0.18, 0.03 + blade * 0.005, z + Math.sin(blade) * 0.18);
+    }
+  }
+
+  private createLandmarks() {
+    const stone = this.material("landmark-stone", "#49645f", { emissive: "#102421", specular: "#73968a" });
+    const rune = this.material("landmark-rune", palette.teal, { emissive: "#5fe0d0", specular: "#000000" });
+    [[-12, 11.8], [-2.8, 8.6], [7.4, -1.2], [10.8, -7.4]].forEach(([x, z], index) => {
+      const monolith = MeshBuilder.CreateCylinder(`waystone-${index}`, { height: 2.1 + (index % 2) * 0.3, diameterTop: 0.42, diameterBottom: 0.7, tessellation: 6 }, this.scene);
+      monolith.material = stone;
+      monolith.position = new Vector3(x, 1.05, z);
+      monolith.rotation.y = index * 0.6;
+      const runeFace = MeshBuilder.CreateDisc(`waystone-rune-${index}`, { radius: 0.18, tessellation: 12 }, this.scene);
+      runeFace.material = rune;
+      runeFace.position = new Vector3(x + 0.02, 1.2, z - 0.36);
+      runeFace.rotation.x = Math.PI / 2;
+      runeFace.rotation.z = index * 0.4;
+    });
+    const bridgeMat = this.material("stream-bridge", "#6d5031", { emissive: "#1e1207", specular: "#9d7641" });
+    [-7.7, -6.5, -5.3].forEach((z, index) => {
+      const plank = MeshBuilder.CreateBox(`stream-plank-${index}`, { width: 4.9, height: 0.18, depth: 0.44 }, this.scene);
+      plank.material = bridgeMat;
+      plank.position = new Vector3(17.7, 0.11, z);
+      plank.rotation.y = -0.24;
     });
   }
 

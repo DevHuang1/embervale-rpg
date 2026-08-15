@@ -42,3 +42,10 @@
 - [x] Lay out larger forest regions, routes, and landmark spacing.
 - [x] Expand terrain, camera framing, movement bounds, and minimap conversion.
 - [x] Test navigation, quest routing, and live player tracking across the larger map.
+
+## 3D Atmosphere Upgrade
+
+- [x] Review the current terrain, lighting, scene materials, and camera behavior.
+- [x] Define richer terrain layers, forest landmarks, and lighting treatment.
+- [x] Implement terrain, foliage, water, lighting, and camera enhancements.
+- [x] Visually test the upgraded exploration and combat scenes.

@@ -34,3 +34,4 @@
 - Satchel verification confirms the Moss Tonic hover card renders its Common rarity, full description, and both stat lines: “Restores 12 warmth” and “Single-use remedy.”
 - The expanded Whispergrove preview now visibly extends far beyond the original compact clearing, with a long pale-stone route, wider forest perimeter, and the Hushling set deeper into the first region.
 - The scaled “Whispergrove expanse” minimap now separates the player, Hushling, Ember Shard, and beacon across the larger landmass. The autoplay route also reaches and engages the farther Hushling correctly under the expanded coordinates.
+- Visual exploration checks confirm the 3D upgrade adds layered meadow islands, larger varied trees, fern clusters, route stones, rune waystones, and a moonrun stream; the camera now follows the player smoothly while preserving the isometric storybook composition.
