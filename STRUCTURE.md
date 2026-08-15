@@ -6,10 +6,10 @@ React supplies the full-screen shell. Babylon owns the canvas, scene, camera, me
 |---|---|
 | `components/GameCanvas.tsx` | Owns the canvas lifecycle, one-time engine initialization, resize behavior, and cleanup |
 | `game/scene.ts` | Creates the Babylon scene and returns the game handle |
-| `game/GameWorld.ts` | Builds the diorama, state machine, UI projection, input, combat, and quest progression |
-| `game/types.ts` | Shares game state and UI event types |
+| `game/GameWorld.ts` | Builds the diorama, cursor commands, auto-combat, loot drops, inventory effects, class skills, and quest progression |
+| `game/types.ts` | Shares game state plus inventory and Cinder Warden class-skill definitions |
 | `game/palette.ts` | Holds the intentional Moss & Candlewax material colors |
-| `components/GameOverlay.tsx` | Renders branded HUD, combat actions, quest log, touch pad, completion card, and title intro |
+| `components/GameOverlay.tsx` | Renders the branded HUD, satchel inventory, class skill kit, loot feedback, combat status, quest log, and title intro |
 | `pages/Home.tsx` | Composes canvas and overlay; state is driven through a small event bridge |
 
 ## Data Model
@@ -17,7 +17,9 @@ React supplies the full-screen shell. Babylon owns the canvas, scene, camera, me
 ```text
 QuestStage = seekSprite | claimShard | lightBeacon | complete
 CombatState = exploring | combat | victory | defeated
-GameState = { hp, maxHp, enemyHp, maxEnemyHp, level, xp, stage, combatState, log, shardCollected, beaconLit, playerPosition }
+InventoryItem = consumable | relic | quest item with quantity and description
+ClassSkill = Cinder Lash | Mend Flame with independent cooldowns
+GameState = { hp, enemyHp, level, xp, stage, combatState, inventory, playerClass, classPassive, skillCooldowns, lootNotice }
 ```
 
 ## Scene Composition

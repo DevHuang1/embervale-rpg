@@ -13,8 +13,10 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Scene } from "@babylonjs/core/scene";
 import { palette } from "@/game/palette";
 import {
-  initialGameState,
+  createInitialGameState,
   type GameState,
+  type ItemId,
+  type SkillId,
 } from "@/game/types";
 
 type WorldOptions = {
@@ -31,7 +33,7 @@ export class GameWorld {
   private readonly canvas: HTMLCanvasElement;
   private readonly onStateChange: (state: GameState) => void;
   private readonly demoMode: boolean;
-  private state: GameState = { ...initialGameState };
+  private state: GameState = createInitialGameState();
   private player!: TransformNode;
   private enemy!: TransformNode;
   private shard!: TransformNode;
@@ -44,6 +46,8 @@ export class GameWorld {
   private moveTarget: Vector3 | null = null;
   private enemySelected = false;
   private autoStrikeCooldown = 0;
+  private autoStrikeCount = 0;
+  private cooldownUiTimer = 0;
   private readonly canvasPointerDown: (event: PointerEvent) => void;
   private readonly playerStart = new Vector3(-3.85, 0, 2.75);
   private readonly enemyPosition = new Vector3(-0.4, 0, 0.6);
@@ -69,6 +73,7 @@ export class GameWorld {
 
   update(delta: number) {
     this.time += delta;
+    this.updateSkillCooldowns(delta);
     if (this.demoMode) this.runDemo(delta);
     else if (this.enemySelected) this.updateAutoStrike(delta);
     else this.moveToCursorTarget(delta);
@@ -87,7 +92,7 @@ export class GameWorld {
   }
 
   restart() {
-    this.state = { ...initialGameState };
+    this.state = createInitialGameState();
     this.player.position.copyFrom(this.playerStart);
     this.enemy.position.copyFrom(this.enemyPosition);
     this.enemy.setEnabled(true);
@@ -96,6 +101,7 @@ export class GameWorld {
     this.moveTarget = null;
     this.enemySelected = false;
     this.autoStrikeCooldown = 0;
+    this.autoStrikeCount = 0;
     this.cursorMarker.setEnabled(false);
     this.enemyMarker.setEnabled(false);
     this.emit();
@@ -108,6 +114,58 @@ export class GameWorld {
 
   engageEnemy() {
     this.selectEnemy();
+  }
+
+  useInventoryItem(itemId: ItemId) {
+    const item = this.state.inventory.find((entry) => entry.id === itemId);
+    if (!item || item.kind !== "consumable" || item.quantity < 1) {
+      this.state.log = "That satchel pocket holds nothing usable right now.";
+      this.emit();
+      return;
+    }
+    const restored = Math.min(12, this.state.maxHp - this.state.hp);
+    if (!restored) {
+      this.state.log = "You save the Moss Tonic; your lantern is already at full warmth.";
+      this.emit();
+      return;
+    }
+    item.quantity -= 1;
+    this.state.hp += restored;
+    this.state.lootNotice = null;
+    this.state.log = `You drink a Moss Tonic and recover ${restored} warmth.`;
+    this.emit();
+  }
+
+  useSkill(skillId: SkillId) {
+    const remaining = this.state.skillCooldowns[skillId];
+    if (remaining > 0) {
+      this.state.log = "That lantern rite is still gathering itself.";
+      this.emit();
+      return;
+    }
+    if (skillId === "mend-flame") {
+      const restored = Math.min(10, this.state.maxHp - this.state.hp);
+      this.state.hp += restored;
+      this.state.skillCooldowns[skillId] = 9;
+      this.state.lootNotice = null;
+      this.state.log = restored ? `Mend Flame returns ${restored} warmth to your lantern.` : "Mend Flame settles into a calm, full lantern.";
+      this.emit();
+      return;
+    }
+    if (!this.enemySelected || !this.enemy.isEnabled()) {
+      this.state.log = "Cinder Lash needs a Hushling marked by your lantern.";
+      this.emit();
+      return;
+    }
+    const damage = 16;
+    this.state.skillCooldowns[skillId] = 6;
+    this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
+    this.state.log = `Cinder Lash arcs through the bramble for ${damage} ember damage.`;
+    if (this.state.enemyHp <= 0) {
+      this.defeatEnemy();
+      return;
+    }
+    this.emit();
   }
 
   dispose() {
@@ -378,6 +436,7 @@ export class GameWorld {
     this.cursorMarker.position.y = 0.032;
     this.cursorMarker.setEnabled(true);
     this.state.combatState = "exploring";
+    this.state.lootNotice = null;
     this.state.log = "The lantern answers your mark. Walking the old road.";
     this.emit();
   }
@@ -421,9 +480,13 @@ export class GameWorld {
     this.autoStrikeCooldown -= delta;
     if (this.autoStrikeCooldown > 0) return;
     this.autoStrikeCooldown = 0.92;
-    const damage = this.state.level === 1 ? 8 : 11;
+    this.autoStrikeCount += 1;
+    const passiveStrike = this.autoStrikeCount % 3 === 0;
+    const damage = (this.state.level === 1 ? 8 : 11) + (passiveStrike ? 4 : 0);
     this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
-    this.state.log = `Your lantern-sabre strikes automatically for ${damage}.`;
+    this.state.log = passiveStrike
+      ? `Ember Circuit blooms: your third auto-strike lands for ${damage}.`
+      : `Your lantern-sabre strikes automatically for ${damage}.`;
     if (this.state.enemyHp <= 0) {
       this.defeatEnemy();
       return;
@@ -453,6 +516,7 @@ export class GameWorld {
       this.state.stage = "lightBeacon";
       this.state.shardCollected = true;
       this.shard.setEnabled(false);
+      this.addLoot("ember-shard", 1, "Quest item secured — Ember Shard added to the satchel.");
       this.state.log = "The Ember Shard is warm in your palm. The beacon answers from the ridge.";
       this.emit();
     }
@@ -475,6 +539,8 @@ export class GameWorld {
     this.enemySelected = false;
     this.enemyMarker.setEnabled(false);
     this.shard.setEnabled(true);
+    this.addLoot("hushling-thorn", 1, "Loot acquired — Hushling Thorn and Moss Tonic added to the satchel.");
+    this.addLoot("moss-tonic", 1);
     this.state.log = "The Hushling loosens its thorns. An Ember Shard falls into the grass.";
     this.emit();
   }
@@ -492,7 +558,30 @@ export class GameWorld {
   }
 
   private emit() {
-    this.onStateChange({ ...this.state });
+    this.onStateChange({
+      ...this.state,
+      skillCooldowns: { ...this.state.skillCooldowns },
+      inventory: this.state.inventory.map((item) => ({ ...item })),
+    });
+  }
+
+  private updateSkillCooldowns(delta: number) {
+    const cooldowns = this.state.skillCooldowns;
+    const wasActive = cooldowns["cinder-lash"] > 0 || cooldowns["mend-flame"] > 0;
+    if (!wasActive) return;
+    cooldowns["cinder-lash"] = Math.max(0, cooldowns["cinder-lash"] - delta);
+    cooldowns["mend-flame"] = Math.max(0, cooldowns["mend-flame"] - delta);
+    this.cooldownUiTimer += delta;
+    if (this.cooldownUiTimer >= 0.2 || (!cooldowns["cinder-lash"] && !cooldowns["mend-flame"])) {
+      this.cooldownUiTimer = 0;
+      this.emit();
+    }
+  }
+
+  private addLoot(itemId: ItemId, amount: number, notice?: string) {
+    const item = this.state.inventory.find((entry) => entry.id === itemId);
+    if (item) item.quantity += amount;
+    if (notice) this.state.lootNotice = notice;
   }
 
   private handleCanvasPointerDown(event: PointerEvent) {

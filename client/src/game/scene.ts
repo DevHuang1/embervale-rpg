@@ -3,12 +3,14 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import { GameWorld } from "@/game/GameWorld";
-import type { GameState } from "@/game/types";
+import type { GameState, ItemId, SkillId } from "@/game/types";
 
 export type GameHandle = {
   scene: Scene;
   moveToMapPoint: (normalizedX: number, normalizedY: number) => void;
   engageEnemy: () => void;
+  useInventoryItem: (itemId: ItemId) => void;
+  useSkill: (skillId: SkillId) => void;
   restart: () => void;
   dispose: () => void;
 };
@@ -34,6 +36,8 @@ export async function createGameScene(
     scene,
     moveToMapPoint: (normalizedX, normalizedY) => world.moveToMapPoint(normalizedX, normalizedY),
     engageEnemy: () => world.engageEnemy(),
+    useInventoryItem: (itemId) => world.useInventoryItem(itemId),
+    useSkill: (skillId) => world.useSkill(skillId),
     restart: () => world.restart(),
     dispose: () => {
       world.dispose();

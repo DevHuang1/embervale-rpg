@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { createGameScene, type GameHandle } from "@/game/scene";
-import { initialGameState, type GameState } from "@/game/types";
+import { createInitialGameState, type GameState, type ItemId, type SkillId } from "@/game/types";
 import GameOverlay from "@/components/GameOverlay";
 
 export default function GameCanvas() {
@@ -11,7 +11,7 @@ export default function GameCanvas() {
   const startedRef = useRef(false);
   const handleRef = useRef<GameHandle | null>(null);
   const demoMode = new URLSearchParams(window.location.search).has("demo");
-  const [gameState, setGameState] = useState<GameState>({ ...initialGameState });
+  const [gameState, setGameState] = useState<GameState>(() => createInitialGameState());
   const [introOpen, setIntroOpen] = useState(!demoMode);
 
   useEffect(() => {
@@ -52,6 +52,8 @@ export default function GameCanvas() {
     handleRef.current?.moveToMapPoint(normalizedX, normalizedY);
   }, []);
   const onEnemyClick = useCallback(() => handleRef.current?.engageEnemy(), []);
+  const onUseItem = useCallback((itemId: ItemId) => handleRef.current?.useInventoryItem(itemId), []);
+  const onUseSkill = useCallback((skillId: SkillId) => handleRef.current?.useSkill(skillId), []);
 
   return (
     <main className="game-shell">
@@ -63,6 +65,8 @@ export default function GameCanvas() {
         onBegin={() => setIntroOpen(false)}
         onMapClick={onMapClick}
         onEnemyClick={onEnemyClick}
+        onUseItem={onUseItem}
+        onUseSkill={onUseSkill}
         onRestart={onRestart}
       />
     </main>
