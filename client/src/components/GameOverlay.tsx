@@ -2,35 +2,35 @@
 
 import { useMemo, type PointerEvent } from "react";
 import { ASSETS } from "@/game/assets";
-import { questCopy, type GameState, type MoveIntent, type PlayerAction } from "@/game/types";
+import { questCopy, type GameState } from "@/game/types";
 
 type GameOverlayProps = {
   state: GameState;
   introOpen: boolean;
   demoMode: boolean;
   onBegin: () => void;
-  onAction: (action: PlayerAction) => void;
-  onMove: (intent: MoveIntent, active: boolean) => void;
+  onMapClick: (normalizedX: number, normalizedY: number) => void;
+  onEnemyClick: () => void;
   onRestart: () => void;
 };
 
 const healthPercent = (value: number, max: number) => `${Math.max(0, Math.round((value / max) * 100))}%`;
 
-export default function GameOverlay({ state, introOpen, demoMode, onBegin, onAction, onMove, onRestart }: GameOverlayProps) {
+export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMapClick, onEnemyClick, onRestart }: GameOverlayProps) {
   const quest = questCopy[state.stage];
-  const combatLabel = useMemo(() => state.combatState === "combat" ? "The Hushling’s turn" : "Lantern bearer", [state.combatState]);
-  const moveBindings = (intent: MoveIntent) => ({
-    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-      onMove(intent, true);
-    },
-    onPointerUp: () => onMove(intent, false),
-    onPointerLeave: () => onMove(intent, false),
-    onPointerCancel: () => onMove(intent, false),
-  });
+  const combatLabel = useMemo(() => state.combatState === "combat" ? "Auto-strike engaged" : "Lantern bearer", [state.combatState]);
+  const handleMapPointer = (event: PointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    onMapClick((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
+  };
 
   return (
     <div className="game-overlay" aria-live="polite">
+      {!introOpen && state.combatState !== "defeated" && state.stage !== "complete" && (
+        <div className="map-command-layer" onPointerDown={handleMapPointer} aria-label="Click the grove to walk">
+          {state.stage === "seekSprite" && <button className="enemy-hit-area" type="button" aria-label="Target the Hushling for automatic attacks" onPointerDown={(event) => { event.stopPropagation(); onEnemyClick(); }} />}
+        </div>
+      )}
       <header className="hud-brand hud-interactive">
         <img className="brand-knot" src={ASSETS.logo} alt="Embervale lantern knot" />
         <div>
@@ -84,11 +84,7 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onAct
             </div>
           </div>
           <div className="turn-stamp"><span>{combatLabel}</span><i /></div>
-          <div className="action-row">
-            <button className="rpg-action primary-action" onClick={() => onAction("strike")}><kbd>1</kbd><span><b>Strike</b><small>Scatter shadow</small></span></button>
-            <button className="rpg-action" onClick={() => onAction("guard")}><kbd>2</kbd><span><b>Guard</b><small>Hold the flame</small></span></button>
-            <button className="rpg-action" onClick={() => onAction("mend")}><kbd>3</kbd><span><b>Mend</b><small>Restore warmth</small></span></button>
-          </div>
+          <div className="auto-strike-status"><span className="auto-sigil">✦</span><span><b>Target locked</b><small>Elian closes in and strikes as soon as the Hushling is within reach.</small></span></div>
         </section>
       )}
 
@@ -110,17 +106,10 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onAct
         </section>
       )}
 
-      <section className="touch-dpad hud-interactive" aria-label="Movement controls">
-        <button className="dpad up" aria-label="Move north" {...moveBindings("up")}>↑</button>
-        <button className="dpad left" aria-label="Move west" {...moveBindings("left")}>←</button>
-        <button className="dpad right" aria-label="Move east" {...moveBindings("right")}>→</button>
-        <button className="dpad down" aria-label="Move south" {...moveBindings("down")}>↓</button>
-      </section>
-
       <footer className="control-strip hud-interactive">
-        <span><b>W A S D</b> walk</span><i />
-        <span><b>1 2 3</b> answer</span><i />
-        <span>Hold the glow close.</span>
+        <span><b>Click the grove</b> to walk</span><i />
+        <span><b>Click the Hushling</b> to chase and strike</span><i />
+        <span>Carry the glow close.</span>
       </footer>
 
       {introOpen && (

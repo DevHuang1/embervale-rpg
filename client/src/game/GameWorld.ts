@@ -8,14 +8,13 @@ import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
+import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Scene } from "@babylonjs/core/scene";
 import { palette } from "@/game/palette";
 import {
   initialGameState,
   type GameState,
-  type MoveIntent,
-  type PlayerAction,
 } from "@/game/types";
 
 type WorldOptions = {
@@ -40,17 +39,17 @@ export class GameWorld {
   private lanternLight!: PointLight;
   private beaconLight!: PointLight;
   private enemyLight!: PointLight;
-  private heldMoves = new Set<MoveIntent>();
-  private touchMove: MoveIntent | null = null;
+  private cursorMarker!: TransformNode;
+  private enemyMarker!: TransformNode;
+  private moveTarget: Vector3 | null = null;
+  private enemySelected = false;
+  private autoStrikeCooldown = 0;
+  private readonly canvasPointerDown: (event: PointerEvent) => void;
   private readonly playerStart = new Vector3(-3.85, 0, 2.75);
   private readonly enemyPosition = new Vector3(-0.4, 0, 0.6);
   private readonly shardPosition = new Vector3(-0.2, 0, 0.9);
   private readonly beaconPosition = new Vector3(4.25, 0, -3.15);
   private time = 0;
-  private demoActionCooldown = 0;
-  private guarded = false;
-  private readonly keyDown: (event: KeyboardEvent) => void;
-  private readonly keyUp: (event: KeyboardEvent) => void;
 
   constructor(options: WorldOptions) {
     this.scene = options.scene;
@@ -61,47 +60,18 @@ export class GameWorld {
     this.enemy = new TransformNode("hushling", this.scene);
     this.shard = new TransformNode("ember-shard", this.scene);
     this.beacon = new TransformNode("beacon", this.scene);
-
-    this.keyDown = (event) => {
-      if (this.state.combatState === "combat") {
-        if (event.key === "1") {
-          event.preventDefault();
-          this.performAction("strike");
-          return;
-        }
-        if (event.key === "2") {
-          event.preventDefault();
-          this.performAction("guard");
-          return;
-        }
-        if (event.key === "3") {
-          event.preventDefault();
-          this.performAction("mend");
-          return;
-        }
-      }
-      const intent = this.keyToIntent(event.key);
-      if (!intent || this.state.combatState === "combat") return;
-      event.preventDefault();
-      this.heldMoves.add(intent);
-    };
-    this.keyUp = (event) => {
-      const intent = this.keyToIntent(event.key);
-      if (!intent) return;
-      event.preventDefault();
-      this.heldMoves.delete(intent);
-    };
+    this.canvasPointerDown = (event) => this.handleCanvasPointerDown(event);
 
     this.buildScene();
-    window.addEventListener("keydown", this.keyDown, { passive: false });
-    window.addEventListener("keyup", this.keyUp, { passive: false });
+    this.canvas.addEventListener("pointerdown", this.canvasPointerDown);
     this.onStateChange({ ...this.state });
   }
 
   update(delta: number) {
     this.time += delta;
     if (this.demoMode) this.runDemo(delta);
-    else this.moveFromIntent(delta);
+    else if (this.enemySelected) this.updateAutoStrike(delta);
+    else this.moveToCursorTarget(delta);
 
     const pulse = 0.86 + Math.sin(this.time * 4.2) * 0.14;
     this.lanternLight.intensity = 1.75 * pulse;
@@ -111,46 +81,9 @@ export class GameWorld {
     this.enemy.rotation.y += delta * 0.24;
     this.shard.rotation.y += delta * 1.3;
 
-    if (this.state.combatState !== "combat") {
+    if (this.state.stage !== "seekSprite" && this.state.combatState !== "combat") {
       this.checkQuestProgress();
     }
-  }
-
-  setMoveIntent(intent: MoveIntent, active: boolean) {
-    this.touchMove = active ? intent : this.touchMove === intent ? null : this.touchMove;
-  }
-
-  performAction(action: PlayerAction) {
-    if (this.state.combatState !== "combat") return;
-
-    this.guarded = action === "guard";
-    if (action === "strike") {
-      const damage = this.state.level === 1 ? 11 : 15;
-      this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
-      this.state.log = `Your lantern-sabre scatters ${damage} knots of shadow.`;
-    }
-    if (action === "guard") {
-      this.state.log = "You cup the lantern close. The flame holds steady.";
-    }
-    if (action === "mend") {
-      const recovered = Math.min(9, this.state.maxHp - this.state.hp);
-      this.state.hp += recovered;
-      this.state.log = recovered ? `You mend ${recovered} warmth into your hands.` : "Your lantern is already burning bright.";
-    }
-
-    if (this.state.enemyHp <= 0) {
-      this.defeatEnemy();
-      return;
-    }
-
-    const retaliation = this.guarded ? 2 : 6;
-    this.state.hp = Math.max(0, this.state.hp - retaliation);
-    this.state.log += retaliation ? ` The Hushling answers for ${retaliation}.` : " The Hushling cannot pierce the glow.";
-    if (this.state.hp <= 0) {
-      this.state.combatState = "defeated";
-      this.state.log = "The mist folds around your lantern. Take heart and begin again.";
-    }
-    this.emit();
   }
 
   restart() {
@@ -160,13 +93,25 @@ export class GameWorld {
     this.enemy.setEnabled(true);
     this.shard.setEnabled(false);
     this.beaconLight.intensity = 0;
-    this.guarded = false;
+    this.moveTarget = null;
+    this.enemySelected = false;
+    this.autoStrikeCooldown = 0;
+    this.cursorMarker.setEnabled(false);
+    this.enemyMarker.setEnabled(false);
     this.emit();
   }
 
+  moveToMapPoint(normalizedX: number, normalizedY: number) {
+    const mapTarget = new Vector3((normalizedX - 0.5) * 14.2, 0, (normalizedY - 0.5) * 10.5);
+    this.setMoveTarget(mapTarget);
+  }
+
+  engageEnemy() {
+    this.selectEnemy();
+  }
+
   dispose() {
-    window.removeEventListener("keydown", this.keyDown);
-    window.removeEventListener("keyup", this.keyUp);
+    this.canvas.removeEventListener("pointerdown", this.canvasPointerDown);
   }
 
   private buildScene() {
@@ -193,6 +138,7 @@ export class GameWorld {
     const groundMat = this.material("grove-floor-mat", palette.bottle, { specular: "#000000" });
     const ground = MeshBuilder.CreateGround("whispergrove-floor", { width: 24, height: 20, subdivisions: 2 }, this.scene);
     ground.material = groundMat;
+    ground.isPickable = true;
     ground.position.y = -0.04;
 
     const fringeMat = this.material("forest-fringe-mat", "#0a2117", { specular: "#000000" });
@@ -200,6 +146,7 @@ export class GameWorld {
     fringe.material = fringeMat;
     fringe.position.y = -0.09;
 
+    this.createPointerMarkers();
     this.createPath();
     this.createForest();
     this.createRuinScatter();
@@ -314,19 +261,19 @@ export class GameWorld {
     this.enemy.position.copyFrom(this.enemyPosition);
     const bark = this.material("hushling-bark", "#234c50", { emissive: "#0e2427", specular: "#000000" });
     const glow = this.material("hushling-glow", palette.teal, { emissive: "#78f3e7", specular: "#000000" });
-    const body = MeshBuilder.CreateSphere("hushling-body", { diameter: 1.15, segments: 7 }, this.scene);
+    const body = this.markEnemy(MeshBuilder.CreateSphere("hushling-body", { diameter: 1.15, segments: 7 }, this.scene));
     body.material = bark;
     body.scaling.y = 1.25;
     body.position.y = 0.75;
     body.parent = this.enemy;
     [0, 1, 2].forEach((index) => {
-      const eye = MeshBuilder.CreateSphere(`hushling-eye-${index}`, { diameter: 0.13, segments: 6 }, this.scene);
+      const eye = this.markEnemy(MeshBuilder.CreateSphere(`hushling-eye-${index}`, { diameter: 0.13, segments: 6 }, this.scene));
       eye.material = glow;
       eye.position = new Vector3((index - 1) * 0.2, 0.88 + (index % 2) * 0.07, -0.48);
       eye.parent = this.enemy;
     });
     [0, 1, 2].forEach((index) => {
-      const bramble = MeshBuilder.CreateCylinder(`hushling-bramble-${index}`, { height: 0.85, diameterTop: 0.06, diameterBottom: 0.14, tessellation: 5 }, this.scene);
+      const bramble = this.markEnemy(MeshBuilder.CreateCylinder(`hushling-bramble-${index}`, { height: 0.85, diameterTop: 0.06, diameterBottom: 0.14, tessellation: 5 }, this.scene));
       bramble.material = bark;
       bramble.position = new Vector3((index - 1) * 0.45, 1.26, 0.03);
       bramble.rotation.z = (index - 1) * 0.42;
@@ -396,15 +343,101 @@ export class GameWorld {
     return material;
   }
 
-  private moveFromIntent(delta: number) {
-    if (this.state.combatState === "combat" || this.state.combatState === "defeated" || this.state.stage === "complete") return;
-    const direction = new Vector3(0, 0, 0);
-    const active = this.touchMove ?? Array.from(this.heldMoves).pop();
-    if (active === "up") direction.z -= 1;
-    if (active === "down") direction.z += 1;
-    if (active === "left") direction.x -= 1;
-    if (active === "right") direction.x += 1;
-    if (direction.lengthSquared() > 0) this.movePlayer(direction.normalize(), delta);
+  private createPointerMarkers() {
+    const movementMat = this.material("movement-rune", palette.ember, { emissive: palette.emberLight, specular: "#000000" });
+    const targetMat = this.material("target-rune", palette.teal, { emissive: "#73e5d7", specular: "#000000" });
+    this.cursorMarker = new TransformNode("cursor-rune", this.scene);
+    const cursorRing = MeshBuilder.CreateTorus("cursor-rune-ring", { diameter: 0.85, thickness: 0.042, tessellation: 28 }, this.scene);
+    cursorRing.material = movementMat;
+    cursorRing.rotation.x = Math.PI / 2;
+    cursorRing.parent = this.cursorMarker;
+    this.cursorMarker.setEnabled(false);
+
+    this.enemyMarker = new TransformNode("enemy-rune", this.scene);
+    const targetRing = MeshBuilder.CreateTorus("enemy-rune-ring", { diameter: 1.5, thickness: 0.055, tessellation: 28 }, this.scene);
+    targetRing.material = targetMat;
+    targetRing.rotation.x = Math.PI / 2;
+    targetRing.parent = this.enemyMarker;
+    const targetPoint = MeshBuilder.CreateCylinder("enemy-rune-point", { height: 0.05, diameter: 0.18, tessellation: 8 }, this.scene);
+    targetPoint.material = targetMat;
+    targetPoint.position.y = 0.06;
+    targetPoint.parent = this.enemyMarker;
+    this.enemyMarker.setEnabled(false);
+  }
+
+  private setMoveTarget(point: Vector3) {
+    if (this.state.combatState === "defeated" || this.state.stage === "complete") return;
+    this.enemySelected = false;
+    this.enemyMarker.setEnabled(false);
+    this.moveTarget = new Vector3(
+      Math.max(-7.1, Math.min(7.1, point.x)),
+      0,
+      Math.max(-5.3, Math.min(5.2, point.z)),
+    );
+    this.cursorMarker.position.copyFrom(this.moveTarget);
+    this.cursorMarker.position.y = 0.032;
+    this.cursorMarker.setEnabled(true);
+    this.state.combatState = "exploring";
+    this.state.log = "The lantern answers your mark. Walking the old road.";
+    this.emit();
+  }
+
+  private selectEnemy() {
+    if (this.state.stage !== "seekSprite" || !this.enemy.isEnabled() || this.state.combatState === "defeated") return;
+    this.moveTarget = null;
+    this.cursorMarker.setEnabled(false);
+    this.enemySelected = true;
+    this.autoStrikeCooldown = 0;
+    this.enemyMarker.position.copyFrom(this.enemy.position);
+    this.enemyMarker.position.y = 0.035;
+    this.enemyMarker.setEnabled(true);
+    this.state.combatState = "combat";
+    this.state.log = "Target marked: the Hushling. Closing the distance with lantern raised.";
+    this.emit();
+  }
+
+  private moveToCursorTarget(delta: number) {
+    if (!this.moveTarget || this.state.combatState === "defeated" || this.state.stage === "complete") return;
+    const route = this.moveTarget.subtract(this.player.position);
+    if (route.lengthSquared() < 0.06) {
+      this.moveTarget = null;
+      this.cursorMarker.setEnabled(false);
+      this.state.log = "You reach the place your lantern marked.";
+      this.emit();
+      return;
+    }
+    this.movePlayer(route.normalize(), delta);
+  }
+
+  private updateAutoStrike(delta: number) {
+    if (!this.enemySelected || !this.enemy.isEnabled()) return;
+    const route = this.enemy.position.subtract(this.player.position);
+    const distance = route.length();
+    this.enemyMarker.position.copyFrom(this.enemy.position);
+    if (distance > 1.42) {
+      this.movePlayer(route.normalize(), delta);
+      return;
+    }
+    this.autoStrikeCooldown -= delta;
+    if (this.autoStrikeCooldown > 0) return;
+    this.autoStrikeCooldown = 0.92;
+    const damage = this.state.level === 1 ? 8 : 11;
+    this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
+    this.state.log = `Your lantern-sabre strikes automatically for ${damage}.`;
+    if (this.state.enemyHp <= 0) {
+      this.defeatEnemy();
+      return;
+    }
+    const retaliation = 4;
+    this.state.hp = Math.max(0, this.state.hp - retaliation);
+    this.state.log += ` The Hushling answers for ${retaliation}.`;
+    if (this.state.hp <= 0) {
+      this.state.combatState = "defeated";
+      this.enemySelected = false;
+      this.enemyMarker.setEnabled(false);
+      this.state.log = "The mist folds around your lantern. Select the path again when you are ready.";
+    }
+    this.emit();
   }
 
   private movePlayer(direction: Vector3, delta: number) {
@@ -416,11 +449,6 @@ export class GameWorld {
   }
 
   private checkQuestProgress() {
-    if (this.state.stage === "seekSprite" && Vector3.Distance(this.player.position, this.enemy.position) < 1.55) {
-      this.state.combatState = "combat";
-      this.state.log = "A Hushling reaches for your flame. Choose your answer.";
-      this.emit();
-    }
     if (this.state.stage === "claimShard" && Vector3.Distance(this.player.position, this.shard.position) < 1.1) {
       this.state.stage = "lightBeacon";
       this.state.shardCollected = true;
@@ -444,6 +472,8 @@ export class GameWorld {
     this.state.level = 2;
     this.state.enemyHp = 0;
     this.enemy.setEnabled(false);
+    this.enemySelected = false;
+    this.enemyMarker.setEnabled(false);
     this.shard.setEnabled(true);
     this.state.log = "The Hushling loosens its thorns. An Ember Shard falls into the grass.";
     this.emit();
@@ -451,15 +481,12 @@ export class GameWorld {
 
   private runDemo(delta: number) {
     if (this.state.combatState === "defeated" || this.state.stage === "complete") return;
-    if (this.state.combatState === "combat") {
-      this.demoActionCooldown -= delta;
-      if (this.demoActionCooldown <= 0) {
-        this.demoActionCooldown = 1.35;
-        this.performAction(this.state.hp < 15 ? "mend" : "strike");
-      }
+    if (this.state.stage === "seekSprite") {
+      if (!this.enemySelected) this.selectEnemy();
+      this.updateAutoStrike(delta);
       return;
     }
-    const target = this.state.stage === "seekSprite" ? this.enemyPosition : this.state.stage === "claimShard" ? this.shardPosition : this.beaconPosition;
+    const target = this.state.stage === "claimShard" ? this.shardPosition : this.beaconPosition;
     const route = target.subtract(this.player.position);
     if (route.lengthSquared() > 0.05) this.movePlayer(route.normalize(), delta);
   }
@@ -468,12 +495,27 @@ export class GameWorld {
     this.onStateChange({ ...this.state });
   }
 
-  private keyToIntent(key: string): MoveIntent | null {
-    const normalized = key.toLowerCase();
-    if (normalized === "w" || key === "ArrowUp") return "up";
-    if (normalized === "s" || key === "ArrowDown") return "down";
-    if (normalized === "a" || key === "ArrowLeft") return "left";
-    if (normalized === "d" || key === "ArrowRight") return "right";
-    return null;
+  private handleCanvasPointerDown(event: PointerEvent) {
+    if (event.button !== 0) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const pick = this.scene.pick(event.clientX - rect.left, event.clientY - rect.top);
+    if (!pick?.hit || !pick.pickedPoint) return;
+    const hitPosition = new Vector3(pick.pickedPoint.x, 0, pick.pickedPoint.z);
+    const hitEnemyArea = this.state.stage === "seekSprite" && Vector3.Distance(hitPosition, this.enemy.position) < 1.18;
+    if (this.isEnemyPart(pick.pickedMesh) || hitEnemyArea) {
+      this.selectEnemy();
+      return;
+    }
+    this.setMoveTarget(pick.pickedPoint);
+  }
+
+  private markEnemy<T extends AbstractMesh>(mesh: T): T {
+    mesh.isPickable = true;
+    mesh.metadata = { enemyTarget: true };
+    return mesh;
+  }
+
+  private isEnemyPart(mesh: AbstractMesh | null | undefined) {
+    return Boolean(mesh?.metadata?.enemyTarget);
   }
 }

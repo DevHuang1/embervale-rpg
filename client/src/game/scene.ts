@@ -3,12 +3,12 @@
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { Scene } from "@babylonjs/core/scene";
 import { GameWorld } from "@/game/GameWorld";
-import type { GameState, MoveIntent, PlayerAction } from "@/game/types";
+import type { GameState } from "@/game/types";
 
 export type GameHandle = {
   scene: Scene;
-  performAction: (action: PlayerAction) => void;
-  setMoveIntent: (intent: MoveIntent, active: boolean) => void;
+  moveToMapPoint: (normalizedX: number, normalizedY: number) => void;
+  engageEnemy: () => void;
   restart: () => void;
   dispose: () => void;
 };
@@ -32,8 +32,8 @@ export async function createGameScene(
 
   return {
     scene,
-    performAction: (action) => world.performAction(action),
-    setMoveIntent: (intent, active) => world.setMoveIntent(intent, active),
+    moveToMapPoint: (normalizedX, normalizedY) => world.moveToMapPoint(normalizedX, normalizedY),
+    engageEnemy: () => world.engageEnemy(),
     restart: () => world.restart(),
     dispose: () => {
       world.dispose();

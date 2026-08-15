@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Engine } from "@babylonjs/core/Engines/engine";
 import { createGameScene, type GameHandle } from "@/game/scene";
-import { initialGameState, type GameState, type MoveIntent, type PlayerAction } from "@/game/types";
+import { initialGameState, type GameState } from "@/game/types";
 import GameOverlay from "@/components/GameOverlay";
 
 export default function GameCanvas() {
@@ -44,12 +44,14 @@ export default function GameCanvas() {
     };
   }, []);
 
-  const onAction = useCallback((action: PlayerAction) => handleRef.current?.performAction(action), []);
-  const onMove = useCallback((intent: MoveIntent, active: boolean) => handleRef.current?.setMoveIntent(intent, active), []);
   const onRestart = useCallback(() => {
     setIntroOpen(false);
     handleRef.current?.restart();
   }, []);
+  const onMapClick = useCallback((normalizedX: number, normalizedY: number) => {
+    handleRef.current?.moveToMapPoint(normalizedX, normalizedY);
+  }, []);
+  const onEnemyClick = useCallback(() => handleRef.current?.engageEnemy(), []);
 
   return (
     <main className="game-shell">
@@ -59,8 +61,8 @@ export default function GameCanvas() {
         introOpen={introOpen}
         demoMode={demoMode}
         onBegin={() => setIntroOpen(false)}
-        onAction={onAction}
-        onMove={onMove}
+        onMapClick={onMapClick}
+        onEnemyClick={onEnemyClick}
         onRestart={onRestart}
       />
     </main>
