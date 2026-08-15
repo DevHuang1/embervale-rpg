@@ -1,0 +1,68 @@
+// Moss & Candlewax design reminder: React is a quiet picture frame; the lantern-lit Babylon diorama is the experience.
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Engine } from "@babylonjs/core/Engines/engine";
+import { createGameScene, type GameHandle } from "@/game/scene";
+import { initialGameState, type GameState, type MoveIntent, type PlayerAction } from "@/game/types";
+import GameOverlay from "@/components/GameOverlay";
+
+export default function GameCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const startedRef = useRef(false);
+  const handleRef = useRef<GameHandle | null>(null);
+  const demoMode = new URLSearchParams(window.location.search).has("demo");
+  const [gameState, setGameState] = useState<GameState>({ ...initialGameState });
+  const [introOpen, setIntroOpen] = useState(!demoMode);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || startedRef.current) return;
+    startedRef.current = true;
+    const engine = new Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, adaptToDeviceRatio: true });
+    let disposed = false;
+
+    createGameScene(engine, canvas, (state) => {
+      if (!disposed) setGameState(state);
+    }).then((handle) => {
+      if (disposed) {
+        handle.dispose();
+        return;
+      }
+      handleRef.current = handle;
+      engine.runRenderLoop(() => handle.scene.render());
+    });
+
+    const onResize = () => engine.resize();
+    window.addEventListener("resize", onResize);
+    return () => {
+      disposed = true;
+      window.removeEventListener("resize", onResize);
+      handleRef.current?.dispose();
+      handleRef.current = null;
+      engine.dispose();
+      startedRef.current = false;
+    };
+  }, []);
+
+  const onAction = useCallback((action: PlayerAction) => handleRef.current?.performAction(action), []);
+  const onMove = useCallback((intent: MoveIntent, active: boolean) => handleRef.current?.setMoveIntent(intent, active), []);
+  const onRestart = useCallback(() => {
+    setIntroOpen(false);
+    handleRef.current?.restart();
+  }, []);
+
+  return (
+    <main className="game-shell">
+      <canvas ref={canvasRef} className="game-canvas" aria-label="Embervale playable forest scene" style={{ touchAction: "none" }} />
+      <GameOverlay
+        state={gameState}
+        introOpen={introOpen}
+        demoMode={demoMode}
+        onBegin={() => setIntroOpen(false)}
+        onAction={onAction}
+        onMove={onMove}
+        onRestart={onRestart}
+      />
+    </main>
+  );
+}
