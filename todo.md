@@ -49,3 +49,12 @@
 - [x] Define richer terrain layers, forest landmarks, and lighting treatment.
 - [x] Implement terrain, foliage, water, lighting, and camera enhancements.
 - [x] Visually test the upgraded exploration and combat scenes.
+
+## Responsive Movement and Animation Upgrade
+
+- [x] Audit cursor input, player movement, combat timing, and procedural figure hierarchy.
+- [x] Define acceleration, deceleration, directional facing, and command-feedback behavior.
+- [x] Improve the Cinder Warden and Hushling silhouettes with articulated mesh parts.
+- [x] Add procedural idle, walking, attack, hit, casting, and victory animations.
+- [x] Validate click-to-move, enemy engagement, and animation readability in the browser.
+- [x] Run the production checks and publish the motion upgrade.

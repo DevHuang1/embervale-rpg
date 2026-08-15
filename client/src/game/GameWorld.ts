@@ -50,10 +50,38 @@ export class GameWorld {
   private enemyLight!: PointLight;
   private cursorMarker!: TransformNode;
   private enemyMarker!: TransformNode;
+  private cursorInnerRing!: AbstractMesh;
+  private cursorOuterRing!: AbstractMesh;
+  private cursorChevrons!: TransformNode;
+  private enemyInnerRing!: AbstractMesh;
+  private enemyOuterRing!: AbstractMesh;
+  private playerBody!: TransformNode;
+  private playerCape!: TransformNode;
+  private playerHead!: TransformNode;
+  private playerLanternArm!: TransformNode;
+  private playerOffhandArm!: TransformNode;
+  private playerLantern!: TransformNode;
+  private playerAura!: AbstractMesh;
+  private playerFlame!: AbstractMesh;
+  private enemyBody!: TransformNode;
+  private enemyEyes!: TransformNode;
+  private enemyTendrils: TransformNode[] = [];
   private moveTarget: Vector3 | null = null;
   private enemySelected = false;
   private autoStrikeCooldown = 0;
   private autoStrikeCount = 0;
+  private readonly playerVelocity = new Vector3(0, 0, 0);
+  private readonly playerMoveDirection = new Vector3(0, 0, 1);
+  private playerMotion = 0;
+  private playerAttackTimer = 0;
+  private playerCastTimer = 0;
+  private playerHitTimer = 0;
+  private playerVictoryTimer = 0;
+  private enemyHitTimer = 0;
+  private enemyAttackTimer = 0;
+  private enemyDefeatTimer = 0;
+  private cursorPulseTimer = 0;
+  private targetPulseTimer = 0;
   private cooldownUiTimer = 0;
   private minimapUiTimer = 0;
   private readonly canvasPointerDown: (event: PointerEvent) => void;
@@ -95,12 +123,12 @@ export class GameWorld {
       }
     }
 
+    this.updateCharacterMotion(delta);
+    this.updateCommandMarkers(delta);
+
     const pulse = 0.86 + Math.sin(this.time * 4.2) * 0.14;
     this.lanternLight.intensity = 1.75 * pulse;
     this.enemyLight.intensity = 0.64 + Math.sin(this.time * 3.1) * 0.18;
-    this.player.position.y = Math.sin(this.time * 3.2) * 0.035;
-    this.enemy.position.y = Math.sin(this.time * 2.2 + 1) * 0.08;
-    this.enemy.rotation.y += delta * 0.24;
     this.shard.rotation.y += delta * 1.3;
     const cameraTarget = this.camera.getTarget();
     this.camera.setTarget(Vector3.Lerp(cameraTarget, new Vector3(this.player.position.x, 0, this.player.position.z), Math.min(1, delta * 1.15)));
@@ -121,6 +149,16 @@ export class GameWorld {
     this.enemySelected = false;
     this.autoStrikeCooldown = 0;
     this.autoStrikeCount = 0;
+    this.playerVelocity.set(0, 0, 0);
+    this.playerMotion = 0;
+    this.playerAttackTimer = 0;
+    this.playerCastTimer = 0;
+    this.playerHitTimer = 0;
+    this.playerVictoryTimer = 0;
+    this.enemyHitTimer = 0;
+    this.enemyAttackTimer = 0;
+    this.enemyDefeatTimer = 0;
+    this.resetMotionRig();
     this.minimapUiTimer = 0;
     this.cursorMarker.setEnabled(false);
     this.enemyMarker.setEnabled(false);
@@ -171,6 +209,7 @@ export class GameWorld {
       this.state.skillCooldowns[skillId] = 9;
       this.state.lootNotice = null;
       this.state.log = restored ? `Mend Flame returns ${restored} warmth to your lantern.` : "Mend Flame settles into a calm, full lantern.";
+      this.playerCastTimer = 0.48;
       this.emit();
       return;
     }
@@ -180,6 +219,8 @@ export class GameWorld {
       return;
     }
     const damage = 16;
+    this.playerCastTimer = 0.52;
+    this.enemyHitTimer = 0.42;
     this.state.skillCooldowns[skillId] = 6;
     this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
     this.state.log = `Cinder Lash arcs through the bramble for ${damage} ember damage.`;
@@ -374,25 +415,84 @@ export class GameWorld {
 
   private createPlayer() {
     const cloak = this.material("hero-cloak", "#567846", { specular: "#000000" });
+    const cloakTrim = this.material("hero-cloak-trim", "#b4833a", { emissive: "#1d1002", specular: "#e6c86a" });
     const hood = this.material("hero-hood", "#274a32", { specular: "#000000" });
+    const skin = this.material("hero-skin", "#d5ad81", { emissive: "#20110a", specular: "#6e4731" });
     const brass = this.material("hero-brass", "#c78732", { emissive: "#382104", specular: "#ffd575" });
     const flame = this.material("hero-flame", palette.ember, { emissive: palette.emberLight, specular: "#000000" });
-    const body = MeshBuilder.CreateCylinder("hero-cloak", { height: 1.05, diameterTop: 0.52, diameterBottom: 0.9, tessellation: 8 }, this.scene);
+    const sabre = this.material("hero-sabre", "#b7d7ca", { emissive: "#173d38", specular: "#e1fff4" });
+
+    this.playerBody = new TransformNode("hero-body-rig", this.scene);
+    this.playerBody.parent = this.player;
+    const body = MeshBuilder.CreateCylinder("hero-cloak", { height: 1.04, diameterTop: 0.54, diameterBottom: 0.88, tessellation: 8 }, this.scene);
     body.material = cloak;
     body.position.y = 0.57;
-    body.parent = this.player;
+    body.parent = this.playerBody;
+    const hem = MeshBuilder.CreateTorus("hero-cloak-hem", { diameter: 0.83, thickness: 0.045, tessellation: 8 }, this.scene);
+    hem.material = cloakTrim;
+    hem.position.y = 0.08;
+    hem.rotation.x = Math.PI / 2;
+    hem.parent = this.playerBody;
+    this.playerCape = new TransformNode("hero-cape-rig", this.scene);
+    this.playerCape.parent = this.playerBody;
+    const cape = MeshBuilder.CreateCylinder("hero-cape", { height: 0.86, diameterTop: 0.44, diameterBottom: 0.98, tessellation: 7 }, this.scene);
+    cape.material = cloak;
+    cape.position = new Vector3(0, 0.48, 0.23);
+    cape.scaling.z = 0.72;
+    cape.parent = this.playerCape;
     const head = MeshBuilder.CreateSphere("hero-hood", { diameter: 0.58, segments: 8 }, this.scene);
     head.material = hood;
     head.position = new Vector3(0, 1.16, 0.04);
-    head.parent = this.player;
-    const lantern = MeshBuilder.CreateBox("hero-lantern", { width: 0.28, height: 0.37, depth: 0.22 }, this.scene);
+    head.parent = this.playerBody;
+    this.playerHead = new TransformNode("hero-head-rig", this.scene);
+    this.playerHead.parent = this.playerBody;
+    const face = MeshBuilder.CreateSphere("hero-face", { diameter: 0.27, segments: 7 }, this.scene);
+    face.material = skin;
+    face.position = new Vector3(0, 1.12, -0.24);
+    face.scaling.y = 0.78;
+    face.parent = this.playerHead;
+    const hoodRim = MeshBuilder.CreateTorus("hero-hood-rim", { diameter: 0.55, thickness: 0.05, tessellation: 10 }, this.scene);
+    hoodRim.material = cloakTrim;
+    hoodRim.position = new Vector3(0, 1.08, 0.02);
+    hoodRim.rotation.x = Math.PI / 2;
+    hoodRim.parent = this.playerBody;
+
+    this.playerLanternArm = new TransformNode("hero-lantern-arm", this.scene);
+    this.playerLanternArm.position = new Vector3(0.29, 0.9, 0.05);
+    this.playerLanternArm.parent = this.playerBody;
+    const lanternSleeve = MeshBuilder.CreateCylinder("hero-lantern-sleeve", { height: 0.58, diameter: 0.19, tessellation: 6 }, this.scene);
+    lanternSleeve.material = cloak;
+    lanternSleeve.position.y = -0.27;
+    lanternSleeve.rotation.z = -0.36;
+    lanternSleeve.parent = this.playerLanternArm;
+    this.playerLantern = new TransformNode("hero-lantern-rig", this.scene);
+    this.playerLantern.position = new Vector3(0.16, -0.49, 0.06);
+    this.playerLantern.parent = this.playerLanternArm;
+    const lantern = MeshBuilder.CreateBox("hero-lantern", { width: 0.3, height: 0.39, depth: 0.24 }, this.scene);
     lantern.material = brass;
-    lantern.position = new Vector3(0.47, 0.65, 0.08);
-    lantern.parent = this.player;
+    lantern.parent = this.playerLantern;
+    const lanternCrown = MeshBuilder.CreateCylinder("hero-lantern-crown", { height: 0.1, diameterTop: 0.09, diameterBottom: 0.26, tessellation: 6 }, this.scene);
+    lanternCrown.material = brass;
+    lanternCrown.position.y = 0.25;
+    lanternCrown.parent = this.playerLantern;
     const flameOrb = MeshBuilder.CreateSphere("hero-lantern-flame", { diameter: 0.2, segments: 8 }, this.scene);
     flameOrb.material = flame;
-    flameOrb.position = new Vector3(0.47, 0.68, 0.08);
-    flameOrb.parent = this.player;
+    flameOrb.position.y = 0.03;
+    flameOrb.parent = this.playerLantern;
+    this.playerFlame = flameOrb;
+    this.playerOffhandArm = new TransformNode("hero-sabre-arm", this.scene);
+    this.playerOffhandArm.position = new Vector3(-0.28, 0.9, 0.02);
+    this.playerOffhandArm.parent = this.playerBody;
+    const sabreSleeve = MeshBuilder.CreateCylinder("hero-sabre-sleeve", { height: 0.56, diameter: 0.19, tessellation: 6 }, this.scene);
+    sabreSleeve.material = cloak;
+    sabreSleeve.position.y = -0.25;
+    sabreSleeve.rotation.z = 0.33;
+    sabreSleeve.parent = this.playerOffhandArm;
+    const sabreBlade = MeshBuilder.CreateCylinder("hero-lantern-sabre", { height: 0.63, diameterTop: 0.035, diameterBottom: 0.065, tessellation: 5 }, this.scene);
+    sabreBlade.material = sabre;
+    sabreBlade.position = new Vector3(-0.1, -0.5, 0.08);
+    sabreBlade.rotation.z = 0.29;
+    sabreBlade.parent = this.playerOffhandArm;
     const lanternAuraMat = this.material("hero-lantern-aura", palette.ember, { emissive: palette.ember });
     lanternAuraMat.alpha = 0.18;
     const lanternAura = MeshBuilder.CreateDisc("hero-lantern-aura", { radius: 1.15, tessellation: 32 }, this.scene);
@@ -400,34 +500,55 @@ export class GameWorld {
     lanternAura.rotation.x = Math.PI / 2;
     lanternAura.position.y = 0.025;
     lanternAura.parent = this.player;
-    this.lanternLight = new PointLight("hero-lantern-light", new Vector3(0, 1.1, 0), this.scene);
+    this.playerAura = lanternAura;
+    this.lanternLight = new PointLight("hero-lantern-light", new Vector3(0, 0.04, 0), this.scene);
     this.lanternLight.diffuse = color(palette.ember);
     this.lanternLight.range = 5.7;
     this.lanternLight.intensity = 2.2;
-    this.lanternLight.parent = this.player;
+    this.lanternLight.parent = this.playerLantern;
   }
 
   private createEnemy() {
     this.enemy.position.copyFrom(this.enemyPosition);
     const bark = this.material("hushling-bark", "#234c50", { emissive: "#0e2427", specular: "#000000" });
+    const barkDark = this.material("hushling-deep-bark", "#102d32", { emissive: "#071416", specular: "#000000" });
     const glow = this.material("hushling-glow", palette.teal, { emissive: "#78f3e7", specular: "#000000" });
+    this.enemyBody = new TransformNode("hushling-body-rig", this.scene);
+    this.enemyBody.parent = this.enemy;
     const body = this.markEnemy(MeshBuilder.CreateSphere("hushling-body", { diameter: 1.15, segments: 7 }, this.scene));
     body.material = bark;
     body.scaling.y = 1.25;
     body.position.y = 0.75;
-    body.parent = this.enemy;
+    body.parent = this.enemyBody;
+    const belly = this.markEnemy(MeshBuilder.CreateSphere("hushling-belly", { diameter: 0.86, segments: 7 }, this.scene));
+    belly.material = barkDark;
+    belly.position = new Vector3(0, 0.52, 0.08);
+    belly.scaling = new Vector3(1.08, 0.84, 0.86);
+    belly.parent = this.enemyBody;
+    this.enemyEyes = new TransformNode("hushling-eye-rig", this.scene);
+    this.enemyEyes.parent = this.enemyBody;
     [0, 1, 2].forEach((index) => {
       const eye = this.markEnemy(MeshBuilder.CreateSphere(`hushling-eye-${index}`, { diameter: 0.13, segments: 6 }, this.scene));
       eye.material = glow;
       eye.position = new Vector3((index - 1) * 0.2, 0.88 + (index % 2) * 0.07, -0.48);
-      eye.parent = this.enemy;
+      eye.parent = this.enemyEyes;
     });
-    [0, 1, 2].forEach((index) => {
-      const bramble = this.markEnemy(MeshBuilder.CreateCylinder(`hushling-bramble-${index}`, { height: 0.85, diameterTop: 0.06, diameterBottom: 0.14, tessellation: 5 }, this.scene));
+    [0, 1, 2, 3, 4].forEach((index) => {
+      const tendril = new TransformNode(`hushling-tendril-rig-${index}`, this.scene);
+      tendril.position = new Vector3(0, 0.32, 0);
+      tendril.rotation.y = (index / 5) * Math.PI * 2;
+      tendril.parent = this.enemyBody;
+      const bramble = this.markEnemy(MeshBuilder.CreateCylinder(`hushling-bramble-${index}`, { height: 0.92 + (index % 2) * 0.12, diameterTop: 0.055, diameterBottom: 0.16, tessellation: 5 }, this.scene));
       bramble.material = bark;
-      bramble.position = new Vector3((index - 1) * 0.45, 1.26, 0.03);
-      bramble.rotation.z = (index - 1) * 0.42;
-      bramble.parent = this.enemy;
+      bramble.position = new Vector3(0, 0.08, 0.52 + (index % 2) * 0.08);
+      bramble.rotation.x = Math.PI / 2.45;
+      bramble.parent = tendril;
+      const thorn = this.markEnemy(MeshBuilder.CreateSphere(`hushling-thorn-${index}`, { diameter: 0.16, segments: 5 }, this.scene));
+      thorn.material = index % 2 ? barkDark : glow;
+      thorn.position = new Vector3(0, 0.08, 0.92 + (index % 2) * 0.08);
+      thorn.scaling.y = 1.55;
+      thorn.parent = tendril;
+      this.enemyTendrils.push(tendril);
     });
     this.enemyLight = new PointLight("hushling-mist-light", new Vector3(0, 1.1, 0), this.scene);
     this.enemyLight.diffuse = color(palette.teal);
@@ -501,6 +622,22 @@ export class GameWorld {
     cursorRing.material = movementMat;
     cursorRing.rotation.x = Math.PI / 2;
     cursorRing.parent = this.cursorMarker;
+    this.cursorInnerRing = cursorRing;
+    const cursorOuter = MeshBuilder.CreateTorus("cursor-rune-outer-ring", { diameter: 1.28, thickness: 0.024, tessellation: 28 }, this.scene);
+    cursorOuter.material = movementMat;
+    cursorOuter.rotation.x = Math.PI / 2;
+    cursorOuter.parent = this.cursorMarker;
+    this.cursorOuterRing = cursorOuter;
+    this.cursorChevrons = new TransformNode("cursor-rune-chevrons", this.scene);
+    this.cursorChevrons.position.y = 0.045;
+    this.cursorChevrons.parent = this.cursorMarker;
+    [0.34, 0.49, 0.64].forEach((z, index) => {
+      const chevron = MeshBuilder.CreateBox(`cursor-rune-chevron-${index}`, { width: 0.13, height: 0.025, depth: 0.075 }, this.scene);
+      chevron.material = movementMat;
+      chevron.position = new Vector3(0, 0, z);
+      chevron.rotation.y = Math.PI / 4;
+      chevron.parent = this.cursorChevrons;
+    });
     this.cursorMarker.setEnabled(false);
 
     this.enemyMarker = new TransformNode("enemy-rune", this.scene);
@@ -508,6 +645,12 @@ export class GameWorld {
     targetRing.material = targetMat;
     targetRing.rotation.x = Math.PI / 2;
     targetRing.parent = this.enemyMarker;
+    this.enemyInnerRing = targetRing;
+    const targetOuter = MeshBuilder.CreateTorus("enemy-rune-outer-ring", { diameter: 1.92, thickness: 0.025, tessellation: 28 }, this.scene);
+    targetOuter.material = targetMat;
+    targetOuter.rotation.x = Math.PI / 2;
+    targetOuter.parent = this.enemyMarker;
+    this.enemyOuterRing = targetOuter;
     const targetPoint = MeshBuilder.CreateCylinder("enemy-rune-point", { height: 0.05, diameter: 0.18, tessellation: 8 }, this.scene);
     targetPoint.material = targetMat;
     targetPoint.position.y = 0.06;
@@ -526,6 +669,9 @@ export class GameWorld {
     );
     this.cursorMarker.position.copyFrom(this.moveTarget);
     this.cursorMarker.position.y = 0.032;
+    const commandDirection = this.moveTarget.subtract(this.player.position);
+    this.cursorChevrons.rotation.y = Math.atan2(commandDirection.x, commandDirection.z);
+    this.cursorPulseTimer = 0.72;
     this.cursorMarker.setEnabled(true);
     this.state.combatState = "exploring";
     this.state.lootNotice = null;
@@ -541,6 +687,7 @@ export class GameWorld {
     this.autoStrikeCooldown = 0;
     this.enemyMarker.position.copyFrom(this.enemy.position);
     this.enemyMarker.position.y = 0.035;
+    this.targetPulseTimer = 0.72;
     this.enemyMarker.setEnabled(true);
     this.state.combatState = "combat";
     this.state.log = "Target marked: the Hushling. Closing the distance with lantern raised.";
@@ -548,16 +695,20 @@ export class GameWorld {
   }
 
   private moveToCursorTarget(delta: number) {
-    if (!this.moveTarget || this.state.combatState === "defeated" || this.state.stage === "complete") return;
+    if (!this.moveTarget || this.state.combatState === "defeated" || this.state.stage === "complete") {
+      this.slowPlayer(delta);
+      return;
+    }
     const route = this.moveTarget.subtract(this.player.position);
-    if (route.lengthSquared() < 0.06) {
+    const distance = route.length();
+    if (distance < 0.16 && this.playerVelocity.lengthSquared() < 0.1) {
       this.moveTarget = null;
       this.cursorMarker.setEnabled(false);
       this.state.log = "You reach the place your lantern marked.";
       this.emit();
       return;
     }
-    this.movePlayer(route.normalize(), delta);
+    this.movePlayer(route.normalize(), delta, 6.4 * Math.max(0.28, Math.min(1, distance / 1.25)));
   }
 
   private updateAutoStrike(delta: number) {
@@ -566,15 +717,18 @@ export class GameWorld {
     const distance = route.length();
     this.enemyMarker.position.copyFrom(this.enemy.position);
     if (distance > 1.42) {
-      this.movePlayer(route.normalize(), delta);
+      this.movePlayer(route.normalize(), delta, 6.55 * Math.max(0.34, Math.min(1, distance / 2.4)));
       return;
     }
+    this.slowPlayer(delta);
     this.autoStrikeCooldown -= delta;
     if (this.autoStrikeCooldown > 0) return;
     this.autoStrikeCooldown = 0.92;
     this.autoStrikeCount += 1;
     const passiveStrike = this.autoStrikeCount % 3 === 0;
     const damage = (this.state.level === 1 ? 8 : 11) + (passiveStrike ? 4 : 0);
+    this.playerAttackTimer = passiveStrike ? 0.52 : 0.4;
+    this.enemyHitTimer = passiveStrike ? 0.42 : 0.3;
     this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
     this.state.log = passiveStrike
       ? `Ember Circuit blooms: your third auto-strike lands for ${damage}.`
@@ -585,6 +739,8 @@ export class GameWorld {
     }
     const retaliation = 4;
     this.state.hp = Math.max(0, this.state.hp - retaliation);
+    this.enemyAttackTimer = 0.34;
+    this.playerHitTimer = 0.26;
     this.state.log += ` The Hushling answers for ${retaliation}.`;
     if (this.state.hp <= 0) {
       this.state.combatState = "defeated";
@@ -595,12 +751,31 @@ export class GameWorld {
     this.emit();
   }
 
-  private movePlayer(direction: Vector3, delta: number) {
-    const speed = 5.2;
-    this.player.position.addInPlace(direction.scale(speed * delta));
+  private movePlayer(direction: Vector3, delta: number, targetSpeed = 6.4) {
+    const steer = 1 - Math.exp(-delta * 13);
+    const desiredVelocity = direction.scale(targetSpeed);
+    this.playerVelocity.x += (desiredVelocity.x - this.playerVelocity.x) * steer;
+    this.playerVelocity.z += (desiredVelocity.z - this.playerVelocity.z) * steer;
+    this.player.position.addInPlace(this.playerVelocity.scale(delta));
     this.player.position.x = Math.max(-22, Math.min(22, this.player.position.x));
     this.player.position.z = Math.max(-16, Math.min(16, this.player.position.z));
-    this.player.rotation.y = Math.atan2(direction.x, direction.z);
+    this.playerMoveDirection.copyFrom(direction);
+    const facing = Math.atan2(direction.x, direction.z);
+    this.player.rotation.y = this.lerpAngle(this.player.rotation.y, facing, 1 - Math.exp(-delta * 15));
+    this.playerMotion += this.playerVelocity.length() * delta;
+  }
+
+  private slowPlayer(delta: number) {
+    const braking = Math.exp(-delta * 10);
+    this.playerVelocity.scaleInPlace(braking);
+    if (this.playerVelocity.lengthSquared() < 0.001) {
+      this.playerVelocity.set(0, 0, 0);
+      return;
+    }
+    this.player.position.addInPlace(this.playerVelocity.scale(delta));
+    this.player.position.x = Math.max(-22, Math.min(22, this.player.position.x));
+    this.player.position.z = Math.max(-16, Math.min(16, this.player.position.z));
+    this.playerMotion += this.playerVelocity.length() * delta;
   }
 
   private checkQuestProgress() {
@@ -627,7 +802,8 @@ export class GameWorld {
     this.state.xp += 35;
     this.state.level = 2;
     this.state.enemyHp = 0;
-    this.enemy.setEnabled(false);
+    this.enemyDefeatTimer = 0.72;
+    this.playerVictoryTimer = 0.85;
     this.enemySelected = false;
     this.enemyMarker.setEnabled(false);
     this.shard.setEnabled(true);
@@ -683,6 +859,116 @@ export class GameWorld {
       this.state.lootCount = displayCount;
       this.state.lootPulse += 1;
     }
+  }
+
+  private updateCharacterMotion(delta: number) {
+    this.playerAttackTimer = Math.max(0, this.playerAttackTimer - delta);
+    this.playerCastTimer = Math.max(0, this.playerCastTimer - delta);
+    this.playerHitTimer = Math.max(0, this.playerHitTimer - delta);
+    this.playerVictoryTimer = Math.max(0, this.playerVictoryTimer - delta);
+    this.enemyHitTimer = Math.max(0, this.enemyHitTimer - delta);
+    this.enemyAttackTimer = Math.max(0, this.enemyAttackTimer - delta);
+    this.enemyDefeatTimer = Math.max(0, this.enemyDefeatTimer - delta);
+
+    const playerSpeed = this.playerVelocity.length();
+    const walkBlend = Math.min(1, playerSpeed / 6.4);
+    const walkPhase = this.playerMotion * 10.5;
+    const idleSway = Math.sin(this.time * 2.3) * 0.018;
+    const walkBob = Math.abs(Math.sin(walkPhase)) * 0.052 * walkBlend;
+    const attackProgress = this.playerAttackTimer ? 1 - this.playerAttackTimer / 0.52 : 0;
+    const attackCurve = Math.sin(attackProgress * Math.PI) * (this.playerAttackTimer ? 1 : 0);
+    const castProgress = this.playerCastTimer ? 1 - this.playerCastTimer / 0.52 : 0;
+    const castCurve = Math.sin(castProgress * Math.PI) * (this.playerCastTimer ? 1 : 0);
+    const hitCurve = Math.sin((1 - this.playerHitTimer / 0.26) * Math.PI) * (this.playerHitTimer ? 1 : 0);
+    const victoryProgress = this.playerVictoryTimer ? 1 - this.playerVictoryTimer / 0.85 : 0;
+    const victoryCurve = Math.sin(victoryProgress * Math.PI) * (this.playerVictoryTimer ? 1 : 0);
+
+    this.playerBody.position.y = idleSway + walkBob + victoryCurve * 0.18;
+    this.playerBody.position.z = attackCurve * 0.2 + castCurve * 0.08 - hitCurve * 0.06;
+    this.playerBody.rotation.x = -walkBlend * 0.1 + attackCurve * 0.16 - hitCurve * 0.13;
+    this.playerBody.rotation.z = Math.sin(this.time * 2.3) * 0.025 + hitCurve * 0.11;
+    this.playerCape.rotation.x = -0.08 + Math.sin(walkPhase + 0.9) * 0.14 * walkBlend - attackCurve * 0.12;
+    this.playerCape.rotation.z = Math.sin(this.time * 2.1) * 0.035;
+    this.playerHead.rotation.z = Math.sin(this.time * 2.3 + 0.6) * 0.025 - hitCurve * 0.08;
+    this.playerLanternArm.rotation.x = Math.sin(walkPhase) * 0.42 * walkBlend - attackCurve * 0.5 - castCurve * 0.44;
+    this.playerLanternArm.rotation.z = -castCurve * 0.22;
+    this.playerOffhandArm.rotation.x = -Math.sin(walkPhase) * 0.48 * walkBlend + attackCurve * 0.7;
+    this.playerOffhandArm.rotation.z = attackCurve * 0.26;
+    this.playerLantern.rotation.z = Math.sin(this.time * 4.2) * 0.04 - castCurve * 0.12;
+    const auraScale = 1 + Math.sin(this.time * 4.2) * 0.025 + castCurve * 0.36 + victoryCurve * 0.18;
+    this.playerAura.scaling.x = auraScale;
+    this.playerAura.scaling.y = auraScale;
+    this.playerAura.scaling.z = auraScale;
+    const flameScale = 1 + Math.sin(this.time * 5.2) * 0.14 + castCurve * 0.58;
+    this.playerFlame.scaling.set(flameScale, flameScale * 1.18, flameScale);
+    this.player.rotation.y += victoryCurve * delta * 9;
+
+    if (this.enemy.isEnabled()) {
+      const hover = Math.sin(this.time * 2.45 + 1) * 0.075;
+      const hitProgress = this.enemyHitTimer ? 1 - this.enemyHitTimer / 0.42 : 0;
+      const enemyHitCurve = Math.sin(hitProgress * Math.PI) * (this.enemyHitTimer ? 1 : 0);
+      const enemyAttackProgress = this.enemyAttackTimer ? 1 - this.enemyAttackTimer / 0.34 : 0;
+      const enemyAttackCurve = Math.sin(enemyAttackProgress * Math.PI) * (this.enemyAttackTimer ? 1 : 0);
+      const defeatProgress = this.enemyDefeatTimer ? 1 - this.enemyDefeatTimer / 0.72 : 0;
+      const defeatCurve = this.enemyDefeatTimer ? defeatProgress : 0;
+      this.enemy.position.y = hover - defeatCurve * 0.32;
+      this.enemyBody.position.z = enemyAttackCurve * -0.24 + enemyHitCurve * 0.1;
+      this.enemyBody.rotation.z = Math.sin(this.time * 2.2) * 0.06 + enemyHitCurve * 0.18 + defeatCurve * 0.62;
+      this.enemyBody.rotation.y = Math.sin(this.time * 1.7) * 0.11;
+      const enemyScale = 1 + enemyHitCurve * 0.15;
+      this.enemyBody.scaling.set(enemyScale + defeatCurve * 0.2, 1 - defeatCurve * 0.62, enemyScale + defeatCurve * 0.2);
+      this.enemyEyes.scaling.set(1 + enemyHitCurve * 0.42, 1 + enemyHitCurve * 0.42, 1 + enemyHitCurve * 0.42);
+      this.enemyEyes.position.y = Math.sin(this.time * 6.2) * 0.018;
+      this.enemyTendrils.forEach((tendril, index) => {
+        tendril.rotation.z = Math.sin(this.time * 3.1 + index * 1.22) * 0.23 + enemyAttackCurve * (index % 2 ? -0.3 : 0.3);
+        tendril.rotation.x = Math.sin(this.time * 2.2 + index) * 0.08;
+      });
+      if (this.enemyDefeatTimer === 0 && this.state.combatState === "victory") this.enemy.setEnabled(false);
+    }
+  }
+
+  private updateCommandMarkers(delta: number) {
+    if (this.cursorMarker.isEnabled()) {
+      this.cursorPulseTimer = Math.max(0, this.cursorPulseTimer - delta);
+      const pulse = 1 + Math.sin(this.time * 5.4) * 0.08 + (this.cursorPulseTimer > 0 ? this.cursorPulseTimer * 0.32 : 0);
+      this.cursorInnerRing.rotation.y += delta * 1.2;
+      this.cursorOuterRing.rotation.y -= delta * 0.78;
+      this.cursorInnerRing.scaling.set(pulse, pulse, pulse);
+      this.cursorOuterRing.scaling.set(pulse * 1.06, pulse * 1.06, pulse * 1.06);
+      this.cursorChevrons.position.y = 0.045 + Math.sin(this.time * 6.2) * 0.018;
+    }
+    if (this.enemyMarker.isEnabled()) {
+      this.targetPulseTimer = Math.max(0, this.targetPulseTimer - delta);
+      const pulse = 1 + Math.sin(this.time * 4.6) * 0.06 + (this.targetPulseTimer > 0 ? this.targetPulseTimer * 0.22 : 0);
+      this.enemyInnerRing.rotation.y += delta * 0.85;
+      this.enemyOuterRing.rotation.y -= delta * 0.56;
+      this.enemyInnerRing.scaling.set(pulse, pulse, pulse);
+      this.enemyOuterRing.scaling.set(pulse * 1.08, pulse * 1.08, pulse * 1.08);
+    }
+  }
+
+  private resetMotionRig() {
+    this.playerBody.position.set(0, 0, 0);
+    this.playerBody.rotation.set(0, 0, 0);
+    this.playerCape.rotation.set(0, 0, 0);
+    this.playerHead.rotation.set(0, 0, 0);
+    this.playerLanternArm.rotation.set(0, 0, 0);
+    this.playerOffhandArm.rotation.set(0, 0, 0);
+    this.playerLantern.rotation.set(0, 0, 0);
+    this.playerAura.scaling.set(1, 1, 1);
+    this.playerFlame.scaling.set(1, 1, 1);
+    this.enemy.position.y = 0;
+    this.enemyBody.position.set(0, 0, 0);
+    this.enemyBody.rotation.set(0, 0, 0);
+    this.enemyBody.scaling.set(1, 1, 1);
+    this.enemyEyes.position.set(0, 0, 0);
+    this.enemyEyes.scaling.set(1, 1, 1);
+    this.enemyTendrils.forEach((tendril) => tendril.rotation.set(0, tendril.rotation.y, 0));
+  }
+
+  private lerpAngle(current: number, target: number, amount: number) {
+    const difference = ((target - current + Math.PI) % (Math.PI * 2)) - Math.PI;
+    return current + difference * amount;
   }
 
   private handleCanvasPointerDown(event: PointerEvent) {
