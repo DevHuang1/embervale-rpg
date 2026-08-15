@@ -12,3 +12,10 @@
 - [x] Inspect current TypeScript, build, and browser runtime errors.
 - [x] Apply focused fixes for each confirmed root cause.
 - [x] Verify shader-ready scene rendering, error-free build, and live gameplay.
+
+## Compact Player Overlay
+
+- [x] Review the current health, class, and inventory UI implementation.
+- [x] Add a compact status overlay with health and active class.
+- [x] Add an inventory button and focused inventory drawer.
+- [x] Verify overlay interaction alongside movement and combat.

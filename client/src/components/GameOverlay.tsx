@@ -1,6 +1,6 @@
 // Moss & Candlewax design reminder: inventory and class tools are a field kit—small, hand-inked, and arranged around the living grove.
 
-import { useMemo, type PointerEvent } from "react";
+import { useMemo, useState, type PointerEvent } from "react";
 import { ASSETS } from "@/game/assets";
 import { classSkills, questCopy, type GameState, type ItemId, type SkillId } from "@/game/types";
 
@@ -23,6 +23,7 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
   const quest = questCopy[state.stage];
   const combatLabel = useMemo(() => state.combatState === "combat" ? "Auto-strike engaged" : "Lantern bearer", [state.combatState]);
   const itemCount = state.inventory.reduce((total, item) => total + item.quantity, 0);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
   const handleMapPointer = (event: PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     onMapClick((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
@@ -50,39 +51,32 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
         <div className="ledger-meta"><span>Lantern level</span><strong>0{state.level}</strong><span>Ember marks</span><strong>{state.xp.toString().padStart(2, "0")}</strong></div>
       </aside>
 
-      <section className="hero-status hud-interactive" aria-label="Lantern bearer status">
-        <div className="portrait-frame"><img src={ASSETS.heroPortrait} alt="Elian, the lantern bearer" /></div>
-        <div className="status-copy"><span className="status-name">Elian of the Old Road</span><div className="bar-label"><span>Warmth</span><b>{state.hp}/{state.maxHp}</b></div><div className="health-track"><span className="health-fill" style={{ width: healthPercent(state.hp, state.maxHp) }} /></div></div>
-        <span className="lantern-gem" aria-hidden="true" />
+      <section className="player-overlay hud-interactive" aria-label="Player status">
+        <div className="overlay-health"><span className="overlay-sigil">✦</span><div><div className="overlay-label"><span>Warmth</span><b>{state.hp}/{state.maxHp}</b></div><div className="health-track"><span className="health-fill" style={{ width: healthPercent(state.hp, state.maxHp) }} /></div></div></div>
+        <div className="overlay-class"><span>Class</span><b>{state.playerClass}</b><em>Lv. {state.level}</em></div>
+        <button className="inventory-trigger" type="button" aria-expanded={inventoryOpen} aria-controls="inventory-drawer" onPointerDown={(event) => event.stopPropagation()} onClick={() => setInventoryOpen((open) => !open)}><span>Satchel</span><b>{itemCount}</b><i>{inventoryOpen ? "−" : "+"}</i></button>
       </section>
 
-      <section className="inventory-ledger hud-interactive" aria-label="Satchel inventory">
-        <div className="panel-heading"><span>Satchel</span><b>{itemCount} carried</b></div>
+      {inventoryOpen && <section className="inventory-drawer hud-interactive" id="inventory-drawer" aria-label="Satchel inventory">
+        <header className="drawer-heading"><div><span>Field satchel</span><b>{itemCount} items carried</b></div><button type="button" aria-label="Close inventory" onPointerDown={(event) => event.stopPropagation()} onClick={() => setInventoryOpen(false)}>×</button></header>
         <div className="inventory-grid">
           {state.inventory.map((item) => {
             const usable = item.kind === "consumable" && item.quantity > 0;
             return <button key={item.id} className={`inventory-item ${item.kind} ${usable ? "usable" : ""}`} disabled={!usable} onPointerDown={(event) => event.stopPropagation()} onClick={() => usable && onUseItem(item.id)}>
               <span className="item-sigil">{item.id === "moss-tonic" ? "✦" : item.id === "hushling-thorn" ? "⌁" : "◆"}</span>
               <span className="item-details"><b>{item.name}</b><small>{item.description}</small></span>
-              <span className="item-quantity">×{item.quantity}</span>
-              {usable && <em>{item.useLabel}</em>}
+              <span className="item-quantity">×{item.quantity}</span>{usable && <em>{item.useLabel}</em>}
             </button>;
           })}
         </div>
-      </section>
-
-      <section className="class-docket hud-interactive" aria-label="Cinder Warden class skills">
-        <div className="panel-heading"><span>Lantern class</span><b>Level {state.level}</b></div>
-        <h2>{state.playerClass}</h2><p className="class-passive"><span>Passive · Ember Circuit</span>{state.classPassive}</p>
+        <div className="drawer-class"><span>Active class · {state.playerClass}</span><small>{state.classPassive}</small></div>
         <div className="skill-row">
           {classSkills.map((skill) => {
             const cooldown = state.skillCooldowns[skill.id];
-            return <button key={skill.id} className={`skill-button ${skill.accent}`} disabled={cooldown > 0} onPointerDown={(event) => event.stopPropagation()} onClick={() => onUseSkill(skill.id)}>
-              <span className="skill-rune">{skill.id === "cinder-lash" ? "✦" : "✚"}</span><span><b>{skill.shortName}</b><small>{cooldownCopy(cooldown)}</small></span>
-            </button>;
+            return <button key={skill.id} className={`skill-button ${skill.accent}`} disabled={cooldown > 0} onPointerDown={(event) => event.stopPropagation()} onClick={() => onUseSkill(skill.id)}><span className="skill-rune">{skill.id === "cinder-lash" ? "✦" : "✚"}</span><span><b>{skill.shortName}</b><small>{cooldownCopy(cooldown)}</small></span></button>;
           })}
         </div>
-      </section>
+      </section>}
 
       {state.lootNotice && <section className="loot-toast hud-interactive"><span>✦</span><p>{state.lootNotice}</p></section>}
       <section className="field-note hud-interactive"><span className="wax-mark">✦</span><p>{state.log}</p></section>
