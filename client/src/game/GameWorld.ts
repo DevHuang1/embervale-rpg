@@ -54,6 +54,7 @@ export class GameWorld {
   private autoStrikeCooldown = 0;
   private autoStrikeCount = 0;
   private cooldownUiTimer = 0;
+  private minimapUiTimer = 0;
   private readonly canvasPointerDown: (event: PointerEvent) => void;
   private readonly playerStart = new Vector3(-3.85, 0, 2.75);
   private readonly enemyPosition = new Vector3(-0.4, 0, 0.6);
@@ -84,6 +85,15 @@ export class GameWorld {
     else if (this.enemySelected) this.updateAutoStrike(delta);
     else this.moveToCursorTarget(delta);
 
+    if (this.demoMode || this.enemySelected || this.moveTarget) {
+      this.minimapUiTimer += delta;
+      if (this.minimapUiTimer >= 0.1) {
+        this.minimapUiTimer = 0;
+        this.syncPlayerPosition();
+        this.emit();
+      }
+    }
+
     const pulse = 0.86 + Math.sin(this.time * 4.2) * 0.14;
     this.lanternLight.intensity = 1.75 * pulse;
     this.enemyLight.intensity = 0.64 + Math.sin(this.time * 3.1) * 0.18;
@@ -108,8 +118,10 @@ export class GameWorld {
     this.enemySelected = false;
     this.autoStrikeCooldown = 0;
     this.autoStrikeCount = 0;
+    this.minimapUiTimer = 0;
     this.cursorMarker.setEnabled(false);
     this.enemyMarker.setEnabled(false);
+    this.syncPlayerPosition();
     this.emit();
   }
 
@@ -568,7 +580,12 @@ export class GameWorld {
       ...this.state,
       skillCooldowns: { ...this.state.skillCooldowns },
       inventory: this.state.inventory.map((item) => ({ ...item })),
+      playerPosition: { ...this.state.playerPosition },
     });
+  }
+
+  private syncPlayerPosition() {
+    this.state.playerPosition = { x: this.player.position.x, z: this.player.position.z };
   }
 
   private updateSkillCooldowns(delta: number) {

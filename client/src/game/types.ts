@@ -4,6 +4,7 @@ export type QuestStage = "seekSprite" | "claimShard" | "lightBeacon" | "complete
 export type CombatState = "exploring" | "combat" | "victory" | "defeated";
 export type ItemId = "moss-tonic" | "hushling-thorn" | "ember-shard";
 export type ItemKind = "consumable" | "relic" | "quest";
+export type ItemRarity = "Common" | "Uncommon" | "Rare";
 export type SkillId = "cinder-lash" | "mend-flame";
 
 export interface InventoryItem {
@@ -12,6 +13,8 @@ export interface InventoryItem {
   kind: ItemKind;
   quantity: number;
   description: string;
+  rarity: ItemRarity;
+  stats: string[];
   useLabel?: string;
 }
 
@@ -62,6 +65,7 @@ export interface GameState {
   lootNotice: string | null;
   lootCount: number;
   lootPulse: number;
+  playerPosition: { x: number; z: number };
 }
 
 export const createInitialGameState = (): GameState => ({
@@ -80,13 +84,14 @@ export const createInitialGameState = (): GameState => ({
   classPassive: "Every third auto-strike blooms with 4 bonus ember damage.",
   skillCooldowns: { "cinder-lash": 0, "mend-flame": 0 },
   inventory: [
-    { id: "moss-tonic", name: "Moss Tonic", kind: "consumable", quantity: 1, description: "A cool green draft that restores 12 warmth.", useLabel: "Drink" },
-    { id: "hushling-thorn", name: "Hushling Thorn", kind: "relic", quantity: 0, description: "A cold bramble trophy. It hums near old magic." },
-    { id: "ember-shard", name: "Ember Shard", kind: "quest", quantity: 0, description: "A lost fragment needed to awaken the grove beacon." },
+    { id: "moss-tonic", name: "Moss Tonic", kind: "consumable", quantity: 1, description: "A cool green draft steeped beneath Whispergrove’s root stones.", rarity: "Common", stats: ["Restores 12 warmth", "Single-use remedy"], useLabel: "Drink" },
+    { id: "hushling-thorn", name: "Hushling Thorn", kind: "relic", quantity: 0, description: "A cold bramble trophy that whispers near places where shadow gathers.", rarity: "Uncommon", stats: ["Resonance +1", "Hushling trophy"] },
+    { id: "ember-shard", name: "Ember Shard", kind: "quest", quantity: 0, description: "A warm fragment of the old beacon’s heart, still bright beneath the ash.", rarity: "Rare", stats: ["Beacon charge +1", "Quest relic"] },
   ],
   lootNotice: null,
   lootCount: 0,
   lootPulse: 0,
+  playerPosition: { x: -3.85, z: 2.75 },
 });
 
 export const initialGameState = createInitialGameState();

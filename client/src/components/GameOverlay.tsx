@@ -1,7 +1,8 @@
 // Moss & Candlewax design reminder: inventory and class tools are a field kit—small, hand-inked, and arranged around the living grove.
 
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { ASSETS } from "@/game/assets";
+import { playLootSound, playSatchelSound, prepareInterfaceAudio } from "@/game/sound";
 import { classSkills, questCopy, type GameState, type ItemId, type SkillId } from "@/game/types";
 
 type GameOverlayProps = {
@@ -26,13 +27,41 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [minimapOpen, setMinimapOpen] = useState(false);
   const [showLoot, setShowLoot] = useState(false);
+  const [tooltipItem, setTooltipItem] = useState<ItemId | null>(null);
+  const inventoryOpenRef = useRef(false);
+  const playerMapStyle = useMemo(() => ({
+    left: `${Math.max(5, Math.min(95, ((state.playerPosition.x + 7.1) / 14.2) * 100))}%`,
+    top: `${Math.max(7, Math.min(93, ((state.playerPosition.z + 5.3) / 10.5) * 100))}%`,
+  }) as CSSProperties, [state.playerPosition]);
   const handleMapPointer = (event: PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     onMapClick((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
   };
+  const toggleInventory = useCallback(() => {
+    const next = !inventoryOpenRef.current;
+    inventoryOpenRef.current = next;
+    setInventoryOpen(next);
+    playSatchelSound(next);
+  }, []);
+  const closeInventory = useCallback(() => {
+    if (!inventoryOpenRef.current) return;
+    inventoryOpenRef.current = false;
+    setInventoryOpen(false);
+    playSatchelSound(false);
+  }, []);
+  useEffect(() => {
+    const unlock = () => prepareInterfaceAudio();
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
   useEffect(() => {
     if (!state.lootNotice) return;
     setShowLoot(true);
+    playLootSound();
     const timeout = window.setTimeout(() => setShowLoot(false), 2800);
     return () => window.clearTimeout(timeout);
   }, [state.lootNotice, state.lootPulse]);
@@ -42,13 +71,13 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
       if (target?.closest("input, textarea, [contenteditable='true']")) return;
       if (event.key.toLowerCase() === "i") {
         event.preventDefault();
-        setInventoryOpen((open) => !open);
+        toggleInventory();
       }
-      if (event.key === "Escape") setInventoryOpen(false);
+      if (event.key === "Escape") closeInventory();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [closeInventory, toggleInventory]);
 
   return (
     <div className="game-overlay" aria-live="polite">
@@ -75,24 +104,27 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
       <section className="player-overlay hud-interactive" aria-label="Player status">
         <div className="overlay-health"><span className="overlay-sigil">✦</span><div><div className="overlay-label"><span>Warmth</span><b>{state.hp}/{state.maxHp}</b></div><div className="health-track"><span className="health-fill" style={{ width: healthPercent(state.hp, state.maxHp) }} /></div></div></div>
         <div className="overlay-class"><span>Class</span><b>{state.playerClass}</b><em>Lv. {state.level}</em></div>
-        <button className="inventory-trigger" type="button" aria-expanded={inventoryOpen} aria-controls="inventory-drawer" onPointerDown={(event) => event.stopPropagation()} onClick={() => setInventoryOpen((open) => !open)}><span>Satchel <kbd>I</kbd></span><b>{itemCount}</b><i>{inventoryOpen ? "−" : "+"}</i></button>
+        <button className="inventory-trigger" type="button" aria-expanded={inventoryOpen} aria-controls="inventory-drawer" onPointerDown={(event) => event.stopPropagation()} onClick={toggleInventory}><span>Satchel <kbd>I</kbd></span><b>{itemCount}</b><i>{inventoryOpen ? "−" : "+"}</i></button>
       </section>
 
       <section className="minimap-control hud-interactive" aria-label="Forest minimap controls">
         <button className="minimap-toggle" type="button" aria-expanded={minimapOpen} aria-controls="forest-minimap" onPointerDown={(event) => event.stopPropagation()} onClick={() => setMinimapOpen((open) => !open)}><span>Grove map</span><i>{minimapOpen ? "−" : "+"}</i></button>
-        {minimapOpen && <aside className="forest-minimap" id="forest-minimap" aria-label="Whispergrove minimap"><div className="map-header"><span>Whispergrove</span><b>{quest.chapter}</b></div><div className="map-field"><i className="map-path path-a" /><i className="map-path path-b" /><span className="map-marker player">✦<em>You</em></span><span className={`map-marker hushling ${state.stage === "seekSprite" ? "active" : ""}`}>◌<em>Hushling</em></span><span className={`map-marker shard ${state.stage === "claimShard" ? "active" : ""}`}>◆<em>Ember</em></span><span className={`map-marker beacon ${state.stage === "lightBeacon" ? "active" : ""}`}>✦<em>Beacon</em></span></div><p>Follow the amber path through the grove.</p></aside>}
+        {minimapOpen && <aside className="forest-minimap" id="forest-minimap" aria-label="Whispergrove minimap"><div className="map-header"><span>Whispergrove</span><b>{quest.chapter}</b></div><div className="map-field"><i className="map-path path-a" /><i className="map-path path-b" /><span className="map-marker player" style={playerMapStyle}>✦<em>You</em></span><span className={`map-marker hushling ${state.stage === "seekSprite" ? "active" : ""}`}>◌<em>Hushling</em></span><span className={`map-marker shard ${state.stage === "claimShard" ? "active" : ""}`}>◆<em>Ember</em></span><span className={`map-marker beacon ${state.stage === "lightBeacon" ? "active" : ""}`}>✦<em>Beacon</em></span></div><p>Elian’s lantern marker tracks every step.</p></aside>}
       </section>
 
       {inventoryOpen && <section className="inventory-drawer hud-interactive" id="inventory-drawer" aria-label="Satchel inventory">
-        <header className="drawer-heading"><div><span>Field satchel</span><b>{itemCount} items carried</b></div><button type="button" aria-label="Close inventory" onPointerDown={(event) => event.stopPropagation()} onClick={() => setInventoryOpen(false)}>×</button></header>
+        <header className="drawer-heading"><div><span>Field satchel</span><b>{itemCount} items carried</b></div><button type="button" aria-label="Close inventory" onPointerDown={(event) => event.stopPropagation()} onClick={closeInventory}>×</button></header>
         <div className="inventory-grid">
           {state.inventory.map((item) => {
             const usable = item.kind === "consumable" && item.quantity > 0;
-            return <button key={item.id} className={`inventory-item ${item.kind} ${usable ? "usable" : ""}`} disabled={!usable} onPointerDown={(event) => event.stopPropagation()} onClick={() => usable && onUseItem(item.id)}>
-              <span className="item-sigil">{item.id === "moss-tonic" ? "✦" : item.id === "hushling-thorn" ? "⌁" : "◆"}</span>
-              <span className="item-details"><b>{item.name}</b><small>{item.description}</small></span>
-              <span className="item-quantity">×{item.quantity}</span>{usable && <em>{item.useLabel}</em>}
-            </button>;
+            return <div key={item.id} className="inventory-item-wrap" onMouseEnter={() => setTooltipItem(item.id)} onMouseLeave={() => setTooltipItem(null)} onFocus={() => setTooltipItem(item.id)} onBlur={() => setTooltipItem(null)}>
+              <button className={`inventory-item ${item.kind} ${usable ? "usable" : ""}`} disabled={!usable} onPointerDown={(event) => event.stopPropagation()} onClick={() => usable && onUseItem(item.id)}>
+                <span className="item-sigil">{item.id === "moss-tonic" ? "✦" : item.id === "hushling-thorn" ? "⌁" : "◆"}</span>
+                <span className="item-details"><b>{item.name}</b><small>{item.rarity} · {item.kind}</small></span>
+                <span className="item-quantity">×{item.quantity}</span>{usable && <em>{item.useLabel}</em>}
+              </button>
+              {tooltipItem === item.id && <aside className={`item-tooltip ${item.rarity.toLowerCase()}`} role="tooltip"><span>{item.rarity} {item.kind}</span><b>{item.name}</b><p>{item.description}</p><ul>{item.stats.map((stat) => <li key={stat}>{stat}</li>)}</ul></aside>}
+            </div>;
           })}
         </div>
         <div className="drawer-class"><span>Active class · {state.playerClass}</span><small>{state.classPassive}</small></div>

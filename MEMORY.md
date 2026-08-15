@@ -30,3 +30,5 @@
 - Browser verification confirms the new Grove Map toggle opens a compact Whispergrove chart with the player, Hushling, Ember Shard, and Beacon route markers while preserving the primary scene and quest panel.
 - Live keyboard testing confirms **I** opens the Satchel drawer and **Escape** closes it without affecting the independently opened Grove Map.
 - After removing the GlowLayer path, the restarted browser session reported no shader errors. Full live combat testing then defeated the Hushling, awarded both drops, advanced the quest, and displayed the new animated `+2` Loot secured counter at the top of the forest scene.
+- The autoplay quest run now advances the compact amber player marker across the opened Whispergrove minimap while Elian moves from the Hushling to the Ember Shard and beacon. It also displays the new loot counter for the Ember Shard award.
+- Satchel verification confirms the Moss Tonic hover card renders its Common rarity, full description, and both stat lines: “Restores 12 warmth” and “Single-use remedy.”

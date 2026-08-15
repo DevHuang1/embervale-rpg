@@ -27,3 +27,11 @@
 - [x] Add a visible animated loot counter for new drops.
 - [x] Add keyboard shortcuts to open and close the Satchel drawer.
 - [x] Validate shader compilation, loot animation, overlay controls, and live gameplay.
+
+## Guided Inventory and Living Map
+
+- [x] Review item metadata, player-position updates, and existing interaction events.
+- [x] Add satchel hover tooltips with descriptions, stats, and rarity.
+- [x] Stream live player coordinates to the minimap marker.
+- [x] Add user-gesture-safe Satchel and loot sound effects.
+- [x] Test tooltips, dynamic tracking, and audio feedback in the browser.

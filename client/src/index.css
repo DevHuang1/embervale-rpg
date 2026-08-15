@@ -114,3 +114,10 @@ button { font: inherit; }
 }
 
 @media (max-width: 480px) { .quest-ledger { width: 174px; }.quest-ledger h2 { font-size: 11px; }.ledger-chapter { font-size: 7px; }.ledger-meta { display: none; }.hero-status { width: 219px; }.status-name { max-width: 125px; }.field-note { right: 117px; }.title-copy { width: 93%; }.title-art { opacity: .57; } }
+
+/* Moss & Candlewax interface details: living map marker and tactile satchel item cards. */
+.map-marker.player { color: #ffd374; text-shadow: 0 0 8px rgba(246,184,75,.85); transform: translate(-50%, -50%); transition: top .14s linear, left .14s linear; }
+.inventory-item-wrap { position: relative; }
+.item-tooltip { position: absolute; z-index: 6; right: calc(100% + 10px); top: 50%; display: grid; width: 205px; gap: 4px; padding: 9px 10px; border: 1px solid rgba(244,210,117,.6); background: linear-gradient(145deg, rgba(12,39,28,.98), rgba(5,21,14,.98)); box-shadow: 0 12px 26px rgba(0,0,0,.34); pointer-events: none; transform: translateY(-50%); animation: tooltip-arrive .14s cubic-bezier(.23,1,.32,1) both; }
+.item-tooltip > span { color: #d7bd74; font-size: 7px; letter-spacing: .13em; text-transform: uppercase; }.item-tooltip > b { color: #f4e9c5; font-family: var(--font-display); font-size: 12px; }.item-tooltip p { margin: 0; color: #bed0bd; font-size: 9px; line-height: 1.35; }.item-tooltip ul { display: grid; gap: 2px; margin: 2px 0 0; padding: 5px 0 0; border-top: 1px solid rgba(244,210,117,.18); list-style: none; }.item-tooltip li { color: #e4ca88; font-size: 8px; }.item-tooltip li::before { content: "✦"; margin-right: 5px; color: #9ee0d1; }.item-tooltip.uncommon { border-color: rgba(128,220,203,.6); }.item-tooltip.uncommon > span { color: #9ee0d1; }.item-tooltip.rare { border-color: rgba(241,193,101,.8); box-shadow: 0 12px 30px rgba(0,0,0,.36), 0 0 20px rgba(246,184,75,.14); }
+@keyframes tooltip-arrive { from { opacity: 0; transform: translate(4px, -50%) scale(.98); } to { opacity: 1; transform: translate(0, -50%) scale(1); } }
