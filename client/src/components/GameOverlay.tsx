@@ -29,10 +29,14 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
   const [showLoot, setShowLoot] = useState(false);
   const [tooltipItem, setTooltipItem] = useState<ItemId | null>(null);
   const inventoryOpenRef = useRef(false);
-  const playerMapStyle = useMemo(() => ({
-    left: `${Math.max(5, Math.min(95, ((state.playerPosition.x + 7.1) / 14.2) * 100))}%`,
-    top: `${Math.max(7, Math.min(93, ((state.playerPosition.z + 5.3) / 10.5) * 100))}%`,
-  }) as CSSProperties, [state.playerPosition]);
+  const minimapPoint = useCallback((x: number, z: number) => ({
+    left: `${Math.max(5, Math.min(95, ((x + 22) / 44) * 100))}%`,
+    top: `${Math.max(7, Math.min(93, ((z + 16) / 32) * 100))}%`,
+  }) as CSSProperties, []);
+  const playerMapStyle = useMemo(() => minimapPoint(state.playerPosition.x, state.playerPosition.z), [minimapPoint, state.playerPosition]);
+  const hushlingMapStyle = useMemo(() => minimapPoint(-6.4, 3.15), [minimapPoint]);
+  const shardMapStyle = useMemo(() => minimapPoint(1.25, -4.1), [minimapPoint]);
+  const beaconMapStyle = useMemo(() => minimapPoint(14.2, -10.4), [minimapPoint]);
   const handleMapPointer = (event: PointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     onMapClick((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
@@ -109,7 +113,7 @@ export default function GameOverlay({ state, introOpen, demoMode, onBegin, onMap
 
       <section className="minimap-control hud-interactive" aria-label="Forest minimap controls">
         <button className="minimap-toggle" type="button" aria-expanded={minimapOpen} aria-controls="forest-minimap" onPointerDown={(event) => event.stopPropagation()} onClick={() => setMinimapOpen((open) => !open)}><span>Grove map</span><i>{minimapOpen ? "−" : "+"}</i></button>
-        {minimapOpen && <aside className="forest-minimap" id="forest-minimap" aria-label="Whispergrove minimap"><div className="map-header"><span>Whispergrove</span><b>{quest.chapter}</b></div><div className="map-field"><i className="map-path path-a" /><i className="map-path path-b" /><span className="map-marker player" style={playerMapStyle}>✦<em>You</em></span><span className={`map-marker hushling ${state.stage === "seekSprite" ? "active" : ""}`}>◌<em>Hushling</em></span><span className={`map-marker shard ${state.stage === "claimShard" ? "active" : ""}`}>◆<em>Ember</em></span><span className={`map-marker beacon ${state.stage === "lightBeacon" ? "active" : ""}`}>✦<em>Beacon</em></span></div><p>Elian’s lantern marker tracks every step.</p></aside>}
+        {minimapOpen && <aside className="forest-minimap" id="forest-minimap" aria-label="Whispergrove minimap"><div className="map-header"><span>Whispergrove expanse</span><b>{quest.chapter}</b></div><div className="map-field"><i className="map-path path-a" /><i className="map-path path-b" /><span className="map-marker player" style={playerMapStyle}>✦<em>You</em></span><span className={`map-marker hushling ${state.stage === "seekSprite" ? "active" : ""}`} style={hushlingMapStyle}>◌<em>Hushling</em></span><span className={`map-marker shard ${state.stage === "claimShard" ? "active" : ""}`} style={shardMapStyle}>◆<em>Ember</em></span><span className={`map-marker beacon ${state.stage === "lightBeacon" ? "active" : ""}`} style={beaconMapStyle}>✦<em>Beacon</em></span></div><p>Explore the wide grove; Elian’s lantern tracks every step.</p></aside>}
       </section>
 
       {inventoryOpen && <section className="inventory-drawer hud-interactive" id="inventory-drawer" aria-label="Satchel inventory">

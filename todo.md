@@ -35,3 +35,10 @@
 - [x] Stream live player coordinates to the minimap marker.
 - [x] Add user-gesture-safe Satchel and loot sound effects.
 - [x] Test tooltips, dynamic tracking, and audio feedback in the browser.
+
+## Whispergrove Expansion
+
+- [x] Review existing world bounds, landmark positions, and map-coordinate conversion.
+- [x] Lay out larger forest regions, routes, and landmark spacing.
+- [x] Expand terrain, camera framing, movement bounds, and minimap conversion.
+- [x] Test navigation, quest routing, and live player tracking across the larger map.

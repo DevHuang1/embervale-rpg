@@ -56,10 +56,10 @@ export class GameWorld {
   private cooldownUiTimer = 0;
   private minimapUiTimer = 0;
   private readonly canvasPointerDown: (event: PointerEvent) => void;
-  private readonly playerStart = new Vector3(-3.85, 0, 2.75);
-  private readonly enemyPosition = new Vector3(-0.4, 0, 0.6);
-  private readonly shardPosition = new Vector3(-0.2, 0, 0.9);
-  private readonly beaconPosition = new Vector3(4.25, 0, -3.15);
+  private readonly playerStart = new Vector3(-16, 0, 10);
+  private readonly enemyPosition = new Vector3(-6.4, 0, 3.15);
+  private readonly shardPosition = new Vector3(1.25, 0, -4.1);
+  private readonly beaconPosition = new Vector3(14.2, 0, -10.4);
   private time = 0;
 
   constructor(options: WorldOptions) {
@@ -126,7 +126,7 @@ export class GameWorld {
   }
 
   moveToMapPoint(normalizedX: number, normalizedY: number) {
-    const mapTarget = new Vector3((normalizedX - 0.5) * 14.2, 0, (normalizedY - 0.5) * 10.5);
+    const mapTarget = new Vector3((normalizedX - 0.5) * 44, 0, (normalizedY - 0.5) * 32);
     this.setMoveTarget(mapTarget);
   }
 
@@ -194,13 +194,13 @@ export class GameWorld {
   private buildScene() {
     this.scene.clearColor = new Color4(0.035, 0.09, 0.07, 1);
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogDensity = 0.032;
+    this.scene.fogDensity = 0.018;
     this.scene.fogColor = color(palette.bottle);
 
-    const camera = new ArcRotateCamera("storybook-camera", -1.04, 1.02, 19.8, new Vector3(0.1, 0, 0.15), this.scene);
+    const camera = new ArcRotateCamera("storybook-camera", -1.04, 1.02, 31, new Vector3(-1, 0, 0), this.scene);
     this.scene.activeCamera = camera;
-    camera.lowerRadiusLimit = 16;
-    camera.upperRadiusLimit = 23;
+    camera.lowerRadiusLimit = 24;
+    camera.upperRadiusLimit = 39;
     camera.lowerBetaLimit = 0.82;
     camera.upperBetaLimit = 1.12;
     camera.fov = 0.78;
@@ -212,13 +212,13 @@ export class GameWorld {
     skyLight.groundColor = color("#07140e");
 
     const groundMat = this.material("grove-floor-mat", palette.bottle, { specular: "#000000" });
-    const ground = MeshBuilder.CreateGround("whispergrove-floor", { width: 24, height: 20, subdivisions: 2 }, this.scene);
+    const ground = MeshBuilder.CreateGround("whispergrove-floor", { width: 52, height: 40, subdivisions: 4 }, this.scene);
     ground.material = groundMat;
     ground.isPickable = true;
     ground.position.y = -0.04;
 
     const fringeMat = this.material("forest-fringe-mat", "#0a2117", { specular: "#000000" });
-    const fringe = MeshBuilder.CreateGround("forest-fringe", { width: 34, height: 30 }, this.scene);
+    const fringe = MeshBuilder.CreateGround("forest-fringe", { width: 66, height: 54 }, this.scene);
     fringe.material = fringeMat;
     fringe.position.y = -0.09;
 
@@ -236,8 +236,9 @@ export class GameWorld {
   private createPath() {
     const stone = this.material("pale-path", palette.path, { emissive: "#1b1a12", specular: "#4c4330" });
     const points = [
-      [-3.85, 2.75], [-3.2, 2.0], [-2.45, 1.5], [-1.5, 1.05], [-0.65, 0.8],
-      [0.15, 0.45], [1.25, -0.15], [2.1, -1.05], [3.0, -2.15], [4.15, -3.0],
+      [-16, 10], [-14.3, 8.7], [-12.3, 7.45], [-10.2, 6.1], [-8.1, 4.65],
+      [-6.4, 3.15], [-4.5, 1.65], [-2.4, -0.5], [-0.6, -2.55], [1.25, -4.1],
+      [3.7, -5.1], [6.15, -6.45], [8.6, -7.8], [11.2, -9.15], [14.2, -10.4],
     ];
     points.forEach(([x, z], index) => {
       const plate = MeshBuilder.CreateDisc(`path-stone-${index}`, { radius: 0.62 + (index % 3) * 0.07, tessellation: 7 }, this.scene);
@@ -250,11 +251,13 @@ export class GameWorld {
 
   private createForest() {
     const treePositions = [
-      [-8, 6], [-7, 3.8], [-7.4, 0.5], [-6.8, -2.8], [-7.2, -5.1], [-5.4, 5.8],
-      [-4.2, 5.4], [-2.3, 5.6], [0.3, 5.4], [2.7, 5.2], [5.5, 5.5], [7.4, 4.7],
-      [8, 2.4], [7.3, 0.2], [7.7, -2.8], [6.5, -5.2], [4.5, -5.6], [1.7, -5.5],
-      [-1.2, -5.3], [-3.7, -5.2], [-5.7, -4.8], [-5.8, 0.4], [-4.7, -0.3],
-      [5.8, 2.1], [3.3, 3.8], [-2.8, -2.2], [0.4, -3.8], [4.8, 0.8],
+      [-23, 15], [-20, 12.5], [-21, 8], [-22, 3], [-21, -2], [-22, -7], [-20, -12], [-18, -15],
+      [-16.5, 14.5], [-13.5, 14], [-10, 15], [-6, 14.5], [-2, 14], [2, 15.2], [6, 14], [10, 15], [14, 14.3], [18, 13.8], [22, 12],
+      [22, 8], [21, 3], [22, -2], [21, -7], [20, -12], [17, -15], [13, -14.5], [9, -15.2], [5, -14.7], [1, -15.5], [-3, -14.5], [-7, -15], [-11, -14.2],
+      [-18, 10], [-15, 12], [-12, 10.5], [-10.5, 8.5], [-8.8, 7.8], [-4, 8.8], [-1.5, 10.5], [3.2, 11], [7.2, 10.4], [11.8, 10], [16, 10.8], [19.2, 8.5],
+      [-18, 5.6], [-15.2, 4], [-12.2, 3.4], [-9.2, 1.1], [-7.4, -0.5], [-4.2, -2.6], [-1.8, -4.4], [4.8, -4.1], [7.8, -4.5], [10.2, -6.2], [13.2, -7.5], [17.2, -8.5],
+      [-18, -1], [-15.4, -2.9], [-12.6, -4.8], [-10, -7], [-7.8, -8.8], [-4.8, -9.2], [-2, -10.8], [3.4, -9.7], [6.1, -10.4], [9.1, -11.6], [12.4, -12.8], [16.1, -11.5],
+      [18.6, 4.5], [17.3, 1.1], [18.8, -3.5], [14.8, 4.1], [12.2, 2.4], [9.4, 1.2], [5.8, 2.5], [2.4, 4.2], [-1.2, 5.3], [-5.3, 4.8],
     ];
     treePositions.forEach(([x, z], index) => this.createTree(index, x, z, 0.7 + (index % 4) * 0.09));
   }
@@ -282,7 +285,7 @@ export class GameWorld {
   private createRuinScatter() {
     const stoneMat = this.material("ruin-stone", palette.stone, { emissive: "#0f2020", specular: "#000000" });
     const mossMat = this.material("ruin-lichen", palette.lichen, { emissive: "#16220d", specular: "#000000" });
-    const rocks = [[-3.4, 0.1], [-2.6, -1.1], [1.2, 2.3], [2.5, 1.8], [4.7, -0.9], [5.1, -2.0], [-1.0, 3.1]];
+    const rocks = [[-14.8, 7.2], [-11.6, 5.5], [-7.2, 2.2], [-3.5, -1.5], [0.2, -3.1], [4.4, -5.2], [8.3, -7.1], [11.7, -9.4], [15.5, -10.1], [-1.0, 8.1], [6.7, 7.4], [17.2, 3.5]];
     rocks.forEach(([x, z], index) => {
       const rock = MeshBuilder.CreatePolyhedron(`lichen-stone-${index}`, { type: index % 3 }, this.scene);
       rock.material = index % 3 === 1 ? mossMat : stoneMat;
@@ -290,11 +293,11 @@ export class GameWorld {
       rock.position = new Vector3(x, rock.scaling.y * 0.72, z);
       rock.rotation.y = index * 0.73;
     });
-    [-4.4, -3.8, 1.9, 3.8, 5.4].forEach((x, index) => {
+    [-15.2, -11.4, -7.9, -2.6, 1.5, 5.4, 9.2, 13.6].forEach((x, index) => {
       const mushroom = MeshBuilder.CreateSphere(`mushroom-${index}`, { diameter: 0.18 + index * 0.018, segments: 6 }, this.scene);
       mushroom.material = this.material(`mushroom-mat-${index}`, index % 2 ? palette.ember : "#d6dfac", { emissive: index % 2 ? "#2a1602" : "#183013" });
       mushroom.scaling.y = 0.65;
-      mushroom.position = new Vector3(x, 0.1, index % 2 ? 2.65 : -2.6);
+      mushroom.position = new Vector3(x, 0.1, index % 2 ? 6.65 - index * 0.7 : -4.8 - index * 0.5);
     });
   }
 
@@ -446,9 +449,9 @@ export class GameWorld {
     this.enemySelected = false;
     this.enemyMarker.setEnabled(false);
     this.moveTarget = new Vector3(
-      Math.max(-7.1, Math.min(7.1, point.x)),
+      Math.max(-22, Math.min(22, point.x)),
       0,
-      Math.max(-5.3, Math.min(5.2, point.z)),
+      Math.max(-16, Math.min(16, point.z)),
     );
     this.cursorMarker.position.copyFrom(this.moveTarget);
     this.cursorMarker.position.y = 0.032;
@@ -522,10 +525,10 @@ export class GameWorld {
   }
 
   private movePlayer(direction: Vector3, delta: number) {
-    const speed = 3.25;
+    const speed = 5.2;
     this.player.position.addInPlace(direction.scale(speed * delta));
-    this.player.position.x = Math.max(-7.1, Math.min(7.1, this.player.position.x));
-    this.player.position.z = Math.max(-5.3, Math.min(5.2, this.player.position.z));
+    this.player.position.x = Math.max(-22, Math.min(22, this.player.position.x));
+    this.player.position.z = Math.max(-16, Math.min(16, this.player.position.z));
     this.player.rotation.y = Math.atan2(direction.x, direction.z);
   }
 

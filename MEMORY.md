@@ -32,3 +32,5 @@
 - After removing the GlowLayer path, the restarted browser session reported no shader errors. Full live combat testing then defeated the Hushling, awarded both drops, advanced the quest, and displayed the new animated `+2` Loot secured counter at the top of the forest scene.
 - The autoplay quest run now advances the compact amber player marker across the opened Whispergrove minimap while Elian moves from the Hushling to the Ember Shard and beacon. It also displays the new loot counter for the Ember Shard award.
 - Satchel verification confirms the Moss Tonic hover card renders its Common rarity, full description, and both stat lines: “Restores 12 warmth” and “Single-use remedy.”
+- The expanded Whispergrove preview now visibly extends far beyond the original compact clearing, with a long pale-stone route, wider forest perimeter, and the Hushling set deeper into the first region.
+- The scaled “Whispergrove expanse” minimap now separates the player, Hushling, Ember Shard, and beacon across the larger landmass. The autoplay route also reaches and engages the farther Hushling correctly under the expanded coordinates.

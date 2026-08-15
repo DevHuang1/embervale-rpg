@@ -91,7 +91,7 @@ export const createInitialGameState = (): GameState => ({
   lootNotice: null,
   lootCount: 0,
   lootPulse: 0,
-  playerPosition: { x: -3.85, z: 2.75 },
+  playerPosition: { x: -16, z: 10 },
 });
 
 export const initialGameState = createInitialGameState();
