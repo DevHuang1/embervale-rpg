@@ -29,7 +29,16 @@ export default function GameCanvas() {
         return;
       }
       handleRef.current = handle;
-      engine.runRenderLoop(() => handle.scene.render());
+      engine.runRenderLoop(() => {
+        try {
+          handle.scene.render();
+        } catch (error) {
+          console.error("Embervale render loop failed", error);
+          engine.stopRenderLoop();
+        }
+      });
+    }).catch((error) => {
+      console.error("Embervale scene initialization failed", error);
     });
 
     const onResize = () => engine.resize();

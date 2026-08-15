@@ -7,9 +7,18 @@ import { HemisphericLight } from "@babylonjs/core/Lights/hemisphericLight";
 import { PointLight } from "@babylonjs/core/Lights/pointLight";
 import { GlowLayer } from "@babylonjs/core/Layers/glowLayer";
 import { StandardMaterial } from "@babylonjs/core/Materials/standardMaterial";
+import "@babylonjs/core/Shaders/default.fragment";
+import "@babylonjs/core/Shaders/default.vertex";
 import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
+import "@babylonjs/core/Meshes/Builders/boxBuilder";
+import "@babylonjs/core/Meshes/Builders/cylinderBuilder";
+import "@babylonjs/core/Meshes/Builders/discBuilder";
+import "@babylonjs/core/Meshes/Builders/groundBuilder";
+import "@babylonjs/core/Meshes/Builders/polyhedronBuilder";
+import "@babylonjs/core/Meshes/Builders/sphereBuilder";
+import "@babylonjs/core/Meshes/Builders/torusBuilder";
 import { Scene } from "@babylonjs/core/scene";
 import { palette } from "@/game/palette";
 import {
@@ -179,6 +188,7 @@ export class GameWorld {
     this.scene.fogColor = color(palette.bottle);
 
     const camera = new ArcRotateCamera("storybook-camera", -1.04, 1.02, 19.8, new Vector3(0.1, 0, 0.15), this.scene);
+    this.scene.activeCamera = camera;
     camera.lowerRadiusLimit = 16;
     camera.upperRadiusLimit = 23;
     camera.lowerBetaLimit = 0.82;
